@@ -8,6 +8,14 @@ import {
   gameAccessMiddleware,
   gameCreatorOnly,
 } from '../middleware/gameAuth.js';
+import { validateBody } from '../middleware/validate.js';
+import {
+  createGameSchema,
+  updateGameSchema,
+  joinGameByCodeSchema,
+  pointsConfigSchema,
+  auctionOrderSchema,
+} from '../validation/schemas.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -24,15 +32,10 @@ function generateGameCode(): string {
 }
 
 // Create a new game
-router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/', validateBody(createGameSchema), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name } = req.body;
     const userId = req.user!.id;
-
-    if (!name || name.trim().length === 0) {
-      res.status(400).json({ message: 'Game name is required' });
-      return;
-    }
 
     // Generate unique game code
     let code = generateGameCode();
@@ -159,15 +162,10 @@ router.get('/joinable', async (req: AuthRequest, res: Response): Promise<void> =
 });
 
 // Join a game by code
-router.post('/join', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/join', validateBody(joinGameByCodeSchema), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { code } = req.body;
     const userId = req.user!.id;
-
-    if (!code) {
-      res.status(400).json({ message: 'Game code is required' });
-      return;
-    }
 
     const game = await prisma.game.findUnique({
       where: { code: code.toUpperCase() },
@@ -393,7 +391,7 @@ router.get('/:id', gameAccessMiddleware, async (req: GameAuthRequest, res: Respo
 });
 
 // Update game settings (creator only)
-router.patch('/:id', gameAccessMiddleware, gameCreatorOnly, async (req: GameAuthRequest, res: Response): Promise<void> => {
+router.patch('/:id', gameAccessMiddleware, gameCreatorOnly, validateBody(updateGameSchema), async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { name, joiningAllowed } = req.body;
@@ -611,6 +609,7 @@ router.put(
   '/:id/points-config',
   gameAccessMiddleware,
   gameCreatorOnly,
+  validateBody(pointsConfigSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -710,15 +709,11 @@ router.post(
   '/:id/cricketers/auction-order',
   gameAccessMiddleware,
   gameCreatorOnly,
+  validateBody(auctionOrderSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const { order } = req.body;
-
-      if (!Array.isArray(order)) {
-        res.status(400).json({ message: 'Order must be an array of cricketer IDs' });
-        return;
-      }
 
       // Update each cricketer's auction order
       await Promise.all(

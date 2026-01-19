@@ -3,19 +3,16 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { validateBody } from '../middleware/validate.js';
+import { registerSchema, loginSchema, updateProfileSchema } from '../validation/schemas.js';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Register
-router.post('/register', async (req: Request, res: Response): Promise<void> => {
+router.post('/register', validateBody(registerSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, name } = req.body;
-
-    if (!email || !password || !name) {
-      res.status(400).json({ message: 'Email, password, and name are required' });
-      return;
-    }
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -68,14 +65,9 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Login
-router.post('/login', async (req: Request, res: Response): Promise<void> => {
+router.post('/login', validateBody(loginSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      res.status(400).json({ message: 'Email and password are required' });
-      return;
-    }
 
     // Find user
     const user = await prisma.user.findUnique({ where: { email } });
@@ -146,7 +138,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response): Promi
 });
 
 // Update profile
-router.patch('/profile', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+router.patch('/profile', authMiddleware, validateBody(updateProfileSchema), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { teamName, avatarUrl } = req.body;
 

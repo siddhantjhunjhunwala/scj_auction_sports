@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { gamesApi } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import type { PointSystemConfig } from '../types';
+import { LoadingButton } from '../components/ui/LoadingSpinner';
+import Skeleton from '../components/ui/Skeleton';
 
 interface PointField {
   key: keyof PointSystemConfig;
@@ -58,9 +61,7 @@ export default function PointsConfig() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     if (gameId) {
@@ -77,7 +78,7 @@ export default function PointsConfig() {
       setConfig(response.data);
     } catch (err) {
       console.error('Failed to load config:', err);
-      setError('Failed to load points configuration');
+      toast.error('Failed to load configuration');
     } finally {
       setIsLoading(false);
     }
@@ -87,7 +88,6 @@ export default function PointsConfig() {
     if (!config) return;
     setConfig({ ...config, [key]: value });
     setHasChanges(true);
-    setSuccess(false);
   };
 
   const handleSave = async () => {
@@ -95,13 +95,12 @@ export default function PointsConfig() {
 
     try {
       setIsSaving(true);
-      setError(null);
       await gamesApi.updatePointsConfig(gameId, config);
       setHasChanges(false);
-      setSuccess(true);
+      toast.success('Configuration saved!');
     } catch (err) {
       console.error('Failed to save config:', err);
-      setError('Failed to save points configuration');
+      toast.error('Failed to save configuration');
     } finally {
       setIsSaving(false);
     }
@@ -113,133 +112,163 @@ export default function PointsConfig() {
 
     return (
       <div key={field.key} className="flex items-center justify-between py-2">
-        <label className="text-sm text-gray-700">{field.label}</label>
+        <label className="text-sm text-[var(--text-secondary)]">{field.label}</label>
         <input
           type="number"
           value={value}
           onChange={e => handleChange(field.key, parseInt(e.target.value) || 0)}
           min={field.min ?? 0}
           max={field.max ?? 100}
-          className="w-20 px-2 py-1 text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-20 px-3 py-2 text-center font-mono font-bold text-[var(--text-primary)]
+            bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg
+            focus:border-[var(--accent-gold)] focus:ring-2 focus:ring-[var(--accent-gold)]/20 focus:outline-none
+            transition-all"
         />
       </div>
     );
   };
 
+  const renderSection = (title: string, icon: string, fields: PointField[], subtitle?: string) => (
+    <div className="glass-card p-5 animate-slide-up">
+      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--glass-border)]">
+        <span className="text-xl">{icon}</span>
+        <div>
+          <h2 className="font-display text-[var(--text-primary)]">{title}</h2>
+          {subtitle && <p className="text-xs text-[var(--text-muted)]">{subtitle}</p>}
+        </div>
+      </div>
+      <div className="space-y-1">{fields.map(renderField)}</div>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Loading configuration...</div>
+      <div className="min-h-screen">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="glass-card p-5">
+                <Skeleton width="50%" height={24} className="mb-4" />
+                <div className="space-y-3">
+                  <Skeleton height={40} />
+                  <Skeleton height={40} />
+                  <Skeleton height={40} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(`/game/${gameId}/lobby`)}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              ← Back
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900">Point System Configuration</h1>
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="border-b border-[var(--glass-border)] bg-[var(--bg-secondary)]/50 backdrop-blur-md sticky top-0 z-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <Link
+                to={`/game/${gameId}/lobby`}
+                className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 12H5m7-7-7 7 7 7"/>
+                </svg>
+                Back
+              </Link>
+              <div className="h-6 w-px bg-[var(--glass-border)]" />
+              <h1 className="text-xl font-display text-[var(--text-primary)]">Point Configuration</h1>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4">
+              {hasChanges && (
+                <span className="text-xs sm:text-sm text-[var(--accent-gold)] animate-pulse hidden sm:block">
+                  Unsaved changes
+                </span>
+              )}
+              <LoadingButton
+                onClick={handleSave}
+                isLoading={isSaving}
+                loadingText="Saving..."
+                disabled={!hasChanges}
+                className="text-sm sm:text-base px-3 sm:px-6"
+              >
+                <span className="hidden sm:inline">Save Configuration</span>
+                <span className="sm:hidden">Save</span>
+              </LoadingButton>
+            </div>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isSaving ? 'Saving...' : 'Save Configuration'}
-          </button>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Info Banner */}
+        <div className="glass-card-glow p-3 sm:p-4 mb-4 sm:mb-6 flex items-start sm:items-center gap-3 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-[var(--accent-gold)]/20 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--accent-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm sm:text-base text-[var(--text-primary)] font-medium">Configure your scoring system</p>
+            <p className="text-xs sm:text-sm text-[var(--text-tertiary)]">
+              Set point values for different actions.
+            </p>
+          </div>
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-6">
-            {error}
-            <button onClick={() => setError(null)} className="ml-4 text-red-900 underline">
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-50 text-green-700 p-4 rounded-lg mb-6">
-            Configuration saved successfully!
-          </div>
-        )}
-
-        {/* Grid Layout - 3 columns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Batting */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-              Batting
-            </h2>
-            <div className="space-y-1">{BATTING_FIELDS.map(renderField)}</div>
-          </div>
-
-          {/* Bowling */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-              Bowling
-            </h2>
-            <div className="space-y-1">{BOWLING_FIELDS.map(renderField)}</div>
-          </div>
-
-          {/* Fielding */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-              Fielding
-            </h2>
-            <div className="space-y-1">{FIELDING_FIELDS.map(renderField)}</div>
-          </div>
-
-          {/* Strike Rate */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-              Strike Rate
-            </h2>
-            <p className="text-xs text-gray-500 mb-3">(Min 10 balls faced)</p>
-            <div className="space-y-1">{SR_FIELDS.map(renderField)}</div>
-          </div>
-
-          {/* Economy */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-              Economy
-            </h2>
-            <p className="text-xs text-gray-500 mb-3">(Min 2 overs bowled)</p>
-            <div className="space-y-1">{ECON_FIELDS.map(renderField)}</div>
-          </div>
+        {/* Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {renderSection('Batting', '🏏', BATTING_FIELDS)}
+          {renderSection('Bowling', '🎳', BOWLING_FIELDS)}
+          {renderSection('Fielding', '🧤', FIELDING_FIELDS)}
+          {renderSection('Strike Rate', '⚡', SR_FIELDS, 'Min 10 balls faced')}
+          {renderSection('Economy', '📊', ECON_FIELDS, 'Min 2 overs bowled')}
 
           {/* Summary Card */}
-          <div className="bg-blue-50 rounded-lg border border-blue-200 p-6">
-            <h2 className="text-lg font-semibold text-blue-900 mb-4">Quick Reference</h2>
-            <div className="text-sm text-blue-800 space-y-2">
-              <p>
-                <strong>Runs:</strong> {config?.runPoints || 1} per run
-              </p>
-              <p>
-                <strong>Wickets:</strong> {config?.wicketPoints || 25} per wicket
-              </p>
-              <p>
-                <strong>Catches:</strong> {config?.catchPoints || 8} per catch
-              </p>
-              <p>
-                <strong>Playing XI:</strong> {config?.playingXiBonus || 4} bonus
+          <div className="glass-card-glow p-5 animate-slide-up">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--glass-border)]">
+              <span className="text-xl">📋</span>
+              <h2 className="font-display text-[var(--text-primary)]">Quick Reference</h2>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Per Run</span>
+                <span className="font-mono text-[var(--accent-gold)]">{config?.runPoints || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Per Wicket</span>
+                <span className="font-mono text-[var(--accent-gold)]">{config?.wicketPoints || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Per Catch</span>
+                <span className="font-mono text-[var(--accent-gold)]">{config?.catchPoints || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Playing XI</span>
+                <span className="font-mono text-[var(--accent-gold)]">{config?.playingXiBonus || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">Century Bonus</span>
+                <span className="font-mono text-[var(--accent-gold)]">{config?.runs100Bonus || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--text-secondary)]">5-Wicket Haul</span>
+                <span className="font-mono text-[var(--accent-gold)]">{config?.wickets5Bonus || 0}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-[var(--glass-border)]">
+              <p className="text-xs text-[var(--text-muted)]">
+                Example: 50 runs + 2 wickets = {((config?.runPoints || 0) * 50) + (config?.runs50Bonus || 0) + ((config?.wicketPoints || 0) * 2)} pts
               </p>
             </div>
-            {hasChanges && (
-              <p className="mt-4 text-orange-600 text-sm">
-                You have unsaved changes
-              </p>
-            )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

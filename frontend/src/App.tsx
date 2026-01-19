@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { GameProvider } from './context/GameContext';
+import { ToastProvider } from './context/ToastContext';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 
 // Auth Pages
 import Login from './pages/Login';
@@ -202,15 +204,19 @@ function AppRoutes() {
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <SocketProvider>
-          <GameProvider>
-            <AppRoutes />
-          </GameProvider>
-        </SocketProvider>
-      </AuthProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <SocketProvider>
+            <GameProvider>
+              <ToastProvider>
+                <AppRoutes />
+              </ToastProvider>
+            </GameProvider>
+          </SocketProvider>
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

@@ -7,6 +7,8 @@ import {
   gameCreatorOnly,
 } from '../middleware/gameAuth.js';
 import { sendTeamsPdf } from '../services/emailService.js';
+import { validateBody } from '../middleware/validate.js';
+import { createMatchSchema, saveMatchScoresSchema } from '../validation/schemas.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -165,6 +167,7 @@ router.post(
   '/:gameId/matches',
   gameAccessMiddleware,
   gameCreatorOnly,
+  validateBody(createMatchSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
       const { gameId } = req.params;
@@ -287,6 +290,7 @@ router.post(
   '/:gameId/matches/:matchId/scores',
   gameAccessMiddleware,
   gameCreatorOnly,
+  validateBody(saveMatchScoresSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
       const { gameId, matchId } = req.params;

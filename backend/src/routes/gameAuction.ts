@@ -7,6 +7,8 @@ import {
   gameCreatorOnly,
   ensureParticipantInfo,
 } from '../middleware/gameAuth.js';
+import { validateBody } from '../middleware/validate.js';
+import { placeBidSchema, startAuctionSchema } from '../validation/schemas.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -114,6 +116,7 @@ router.post(
   '/:gameId/auction/start',
   gameAccessMiddleware,
   gameCreatorOnly,
+  validateBody(startAuctionSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
       const { gameId } = req.params;
@@ -177,6 +180,7 @@ router.post(
   '/:gameId/auction/bid',
   gameAccessMiddleware,
   ensureParticipantInfo,
+  validateBody(placeBidSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
       const { gameId } = req.params;

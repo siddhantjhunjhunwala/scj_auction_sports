@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { gamesApi, gameScoringApi } from '../services/api';
-import type { Game, GameMatch, GameCricketer, GamePlayerMatchScore } from '../types';
+import { useToast } from '../context/ToastContext';
+import type { Game, GameMatch, GameCricketer } from '../types';
+import Skeleton from '../components/ui/Skeleton';
+import { LoadingButton } from '../components/ui/LoadingSpinner';
+import { NoPlayersEmpty, NoMatchesEmpty } from '../components/ui/EmptyState';
 
 interface ScoreInput {
   cricketerId: string;
@@ -33,15 +37,14 @@ export default function GameScoring() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showCreateMatch, setShowCreateMatch] = useState(false);
+  const [isCreatingMatch, setIsCreatingMatch] = useState(false);
   const [newMatch, setNewMatch] = useState({
     matchNumber: 1,
     team1: '',
     team2: '',
     matchDate: new Date().toISOString().split('T')[0],
   });
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     if (gameId) {
@@ -73,14 +76,13 @@ export default function GameScoring() {
         setSelectedMatchId(matchesRes.data[matchesRes.data.length - 1].id);
       }
 
-      // Set next match number
       setNewMatch(prev => ({
         ...prev,
         matchNumber: matchesRes.data.length + 1,
       }));
     } catch (err) {
       console.error('Failed to load data:', err);
-      setError('Failed to load scoring data');
+      toast.error('Failed to load scoring data');
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +95,6 @@ export default function GameScoring() {
       const response = await gameScoringApi.getMatchScores(gameId, selectedMatchId);
       const scoreMap = new Map<string, ScoreInput>();
 
-      // Initialize with existing scores or defaults
       cricketers.forEach(c => {
         const existing = response.data.find(s => s.cricketerId === c.id);
         scoreMap.set(c.id, {
@@ -128,7 +129,7 @@ export default function GameScoring() {
     if (!gameId) return;
 
     try {
-      setError(null);
+      setIsCreatingMatch(true);
       const response = await gameScoringApi.createMatch(gameId, newMatch);
       setMatches([...matches, response.data]);
       setSelectedMatchId(response.data.id);
@@ -139,10 +140,12 @@ export default function GameScoring() {
         team2: '',
         matchDate: new Date().toISOString().split('T')[0],
       });
-      setSuccess('Match created successfully');
+      toast.success('Match created', `${newMatch.team1} vs ${newMatch.team2}`);
     } catch (err) {
       console.error('Failed to create match:', err);
-      setError('Failed to create match');
+      toast.error('Failed to create match');
+    } finally {
+      setIsCreatingMatch(false);
     }
   };
 
@@ -166,17 +169,15 @@ export default function GameScoring() {
 
     try {
       setIsSaving(true);
-      setError(null);
       const scoreArray = Array.from(scores.values());
       await gameScoringApi.saveMatchScores(gameId, selectedMatchId, scoreArray);
-      setSuccess('Scores saved successfully');
+      toast.success('Scores saved', 'All player scores have been updated');
 
-      // Reload matches to update scoresPopulated flag
       const matchesRes = await gameScoringApi.getMatches(gameId);
       setMatches(matchesRes.data);
     } catch (err) {
       console.error('Failed to save scores:', err);
-      setError('Failed to save scores');
+      toast.error('Failed to save scores');
     } finally {
       setIsSaving(false);
     }
@@ -184,319 +185,386 @@ export default function GameScoring() {
 
   const selectedMatch = matches.find(m => m.id === selectedMatchId);
 
+  const getPlayerTypeConfig = (type: string) => {
+    const configs: Record<string, { bg: string; text: string; icon: string }> = {
+      batsman: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: '🏏' },
+      bowler: { bg: 'bg-green-500/20', text: 'text-green-400', icon: '🎳' },
+      allrounder: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: '⚡' },
+      wicketkeeper: { bg: 'bg-orange-500/20', text: 'text-orange-400', icon: '🧤' },
+    };
+    return configs[type] || { bg: 'bg-gray-500/20', text: 'text-gray-400', icon: '🏏' };
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen">
+        <header className="border-b border-[var(--glass-border)] bg-[var(--bg-secondary)]/50 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center h-16 gap-4">
+              <Skeleton width={80} height={20} />
+              <div className="h-6 w-px bg-[var(--glass-border)]" />
+              <Skeleton width={150} height={28} />
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="glass-card p-4 mb-6">
+            <div className="flex gap-2">
+              {[1, 2, 3, 4].map(i => (
+                <Skeleton key={i} width={60} height={40} />
+              ))}
+            </div>
+          </div>
+          <div className="glass-card p-4">
+            <Skeleton height={400} />
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(`/game/${gameId}/lobby`)}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              ← Back
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Match Scoring</h1>
-              <p className="text-gray-600">{game?.name}</p>
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="border-b border-[var(--glass-border)] bg-[var(--bg-secondary)]/50 backdrop-blur-md sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <Link
+                to={`/game/${gameId}/lobby`}
+                className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 12H5m7-7-7 7 7 7"/>
+                </svg>
+                Back
+              </Link>
+              <div className="h-6 w-px bg-[var(--glass-border)]" />
+              <div>
+                <h1 className="text-xl font-display text-[var(--text-primary)]">Match Scoring</h1>
+                <p className="text-sm text-[var(--text-tertiary)]">{game?.name}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreateMatch(true)}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Match
+              </button>
+              <LoadingButton
+                onClick={handleSaveScores}
+                isLoading={isSaving}
+                loadingText="Saving..."
+                disabled={!selectedMatchId}
+              >
+                Save Scores
+              </LoadingButton>
             </div>
           </div>
-          <div className="flex gap-4">
-            <button
-              onClick={() => setShowCreateMatch(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              New Match
-            </button>
-            <button
-              onClick={handleSaveScores}
-              disabled={!selectedMatchId || isSaving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isSaving ? 'Saving...' : 'Save Scores'}
-            </button>
-          </div>
         </div>
+      </header>
 
-        {error && (
-          <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-6">
-            {error}
-            <button onClick={() => setError(null)} className="ml-4 underline">
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-50 text-green-700 p-4 rounded-lg mb-6">
-            {success}
-            <button onClick={() => setSuccess(null)} className="ml-4 underline">
-              Dismiss
-            </button>
-          </div>
-        )}
-
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Match Selector */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+        <div className="glass-card p-4 mb-6">
           <div className="flex items-center gap-4 flex-wrap">
-            <label className="text-sm font-medium text-gray-700">Select Match:</label>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--accent-cyan)]/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-[var(--accent-cyan)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-[var(--text-secondary)]">Select Match:</span>
+            </div>
             <div className="flex gap-2 flex-wrap">
               {matches.map(m => (
                 <button
                   key={m.id}
                   onClick={() => setSelectedMatchId(m.id)}
-                  className={`px-4 py-2 rounded ${
+                  className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
                     selectedMatchId === m.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-[var(--accent-gold)] text-[var(--bg-deep)]'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   M{m.matchNumber}
-                  {m.scoresPopulated && <span className="ml-1 text-green-300">✓</span>}
+                  {m.scoresPopulated && (
+                    <svg className={`w-4 h-4 ${selectedMatchId === m.id ? 'text-[var(--bg-deep)]' : 'text-green-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
                 </button>
               ))}
+              {matches.length === 0 && (
+                <span className="text-[var(--text-muted)] text-sm">No matches created yet</span>
+              )}
             </div>
           </div>
           {selectedMatch && (
-            <p className="mt-2 text-sm text-gray-600">
-              {selectedMatch.team1} vs {selectedMatch.team2} •{' '}
-              {new Date(selectedMatch.matchDate).toLocaleDateString()}
-            </p>
+            <div className="mt-4 pt-4 border-t border-[var(--glass-border)] flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🏏</span>
+                <span className="font-display text-[var(--text-primary)]">{selectedMatch.team1}</span>
+              </div>
+              <span className="text-[var(--text-muted)]">vs</span>
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[var(--text-primary)]">{selectedMatch.team2}</span>
+                <span className="text-lg">🏏</span>
+              </div>
+              <span className="text-[var(--text-tertiary)] text-sm ml-auto">
+                {new Date(selectedMatch.matchDate).toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+            </div>
           )}
         </div>
 
         {/* Scoring Table */}
-        {selectedMatchId && cricketers.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {selectedMatchId && cricketers.length > 0 ? (
+          <div className="glass-card overflow-hidden animate-slide-up">
+            <div className="px-6 py-4 border-b border-[var(--glass-border)] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--accent-purple)]/20 flex items-center justify-center">
+                  <span className="text-xl">📊</span>
+                </div>
+                <div>
+                  <h2 className="font-display text-[var(--text-primary)]">Player Scores</h2>
+                  <p className="text-sm text-[var(--text-tertiary)]">{cricketers.length} players to score</p>
+                </div>
+              </div>
+              <div className="text-sm text-[var(--text-tertiary)]">
+                Scroll horizontally to see all fields →
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-[var(--bg-tertiary)]/50 sticky top-0">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-700 sticky left-0 bg-gray-50">
+                    <th className="text-left px-4 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider sticky left-0 bg-[var(--bg-tertiary)] z-10 min-w-[200px]">
                       Player
                     </th>
-                    <th className="px-2 py-3 font-medium text-gray-700">XI</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Runs</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Balls</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">4s</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">6s</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Wkts</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Overs</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Conc</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Mdn</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Dots</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">LBW/B</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Catch</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">Stmp</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">DRO</th>
-                    <th className="px-2 py-3 font-medium text-gray-700">IRO</th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center" title="Playing XI">
+                      XI
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-blue-500/10">
+                      Runs
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-blue-500/10">
+                      Balls
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-blue-500/10">
+                      4s
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-blue-500/10">
+                      6s
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-green-500/10">
+                      Wkts
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-green-500/10">
+                      Overs
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-green-500/10">
+                      Runs
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-green-500/10">
+                      Mdn
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-green-500/10">
+                      Dots
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-green-500/10" title="LBW/Bowled Dismissals">
+                      LBW/B
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-orange-500/10">
+                      Catch
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-orange-500/10">
+                      Stmp
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-orange-500/10" title="Direct Runouts">
+                      DRO
+                    </th>
+                    <th className="px-3 py-3 font-semibold text-[var(--text-tertiary)] uppercase text-xs tracking-wider text-center bg-orange-500/10" title="Indirect Runouts">
+                      IRO
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {cricketers.map(c => {
+                <tbody className="divide-y divide-[var(--glass-border)]">
+                  {cricketers.map((c, i) => {
                     const score = scores.get(c.id);
                     if (!score) return null;
+                    const typeConfig = getPlayerTypeConfig(c.playerType);
 
                     return (
-                      <tr key={c.id} className="border-t border-gray-100">
-                        <td className="px-4 py-2 sticky left-0 bg-white">
-                          <div className="font-medium">
-                            {c.firstName} {c.lastName}
-                          </div>
-                          <div className="text-xs text-gray-500 capitalize">
-                            {c.playerType} • {c.iplTeam}
+                      <tr
+                        key={c.id}
+                        className={`hover:bg-[var(--bg-tertiary)]/30 transition-colors animate-slide-up ${
+                          !score.inPlayingXi ? 'opacity-50' : ''
+                        }`}
+                        style={{ animationDelay: `${i * 0.02}s` }}
+                      >
+                        <td className="px-4 py-3 sticky left-0 bg-[var(--bg-deep)] z-10">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${typeConfig.bg} flex items-center justify-center flex-shrink-0`}>
+                              <span className="text-sm">{typeConfig.icon}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-[var(--text-primary)] truncate">
+                                {c.firstName} {c.lastName}
+                              </div>
+                              <div className="text-xs text-[var(--text-muted)] capitalize truncate">
+                                {c.playerType} • {c.iplTeam}
+                              </div>
+                            </div>
                           </div>
                         </td>
-                        <td className="px-2 py-2 text-center">
+                        <td className="px-3 py-3 text-center">
                           <input
                             type="checkbox"
                             checked={score.inPlayingXi}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'inPlayingXi', e.target.checked)
-                            }
-                            className="w-4 h-4"
+                            onChange={e => handleScoreChange(c.id, 'inPlayingXi', e.target.checked)}
+                            className="w-5 h-5 rounded border-[var(--glass-border)] bg-[var(--bg-tertiary)] text-[var(--accent-gold)] focus:ring-[var(--accent-gold)] focus:ring-offset-0 cursor-pointer"
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        {/* Batting Stats */}
+                        <td className="px-2 py-3 bg-blue-500/5">
                           <input
                             type="number"
                             value={score.runs}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'runs', parseInt(e.target.value) || 0)
-                            }
-                            className="w-14 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'runs', parseInt(e.target.value) || 0)}
+                            className="w-14 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-blue-500/5">
                           <input
                             type="number"
                             value={score.ballsFaced}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'ballsFaced', parseInt(e.target.value) || 0)
-                            }
-                            className="w-14 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'ballsFaced', parseInt(e.target.value) || 0)}
+                            className="w-14 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-blue-500/5">
                           <input
                             type="number"
                             value={score.fours}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'fours', parseInt(e.target.value) || 0)
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'fours', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-blue-500/5">
                           <input
                             type="number"
                             value={score.sixes}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'sixes', parseInt(e.target.value) || 0)
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'sixes', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        {/* Bowling Stats */}
+                        <td className="px-2 py-3 bg-green-500/5">
                           <input
                             type="number"
                             value={score.wickets}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'wickets', parseInt(e.target.value) || 0)
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'wickets', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-green-500/5">
                           <input
                             type="number"
                             value={score.oversBowled}
-                            onChange={e =>
-                              handleScoreChange(
-                                c.id,
-                                'oversBowled',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className="w-14 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'oversBowled', parseFloat(e.target.value) || 0)}
+                            className="w-14 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                             step={0.1}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-green-500/5">
                           <input
                             type="number"
                             value={score.runsConceded}
-                            onChange={e =>
-                              handleScoreChange(
-                                c.id,
-                                'runsConceded',
-                                parseInt(e.target.value) || 0
-                              )
-                            }
-                            className="w-14 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'runsConceded', parseInt(e.target.value) || 0)}
+                            className="w-14 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-green-500/5">
                           <input
                             type="number"
                             value={score.maidens}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'maidens', parseInt(e.target.value) || 0)
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'maidens', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-green-500/5">
                           <input
                             type="number"
                             value={score.dotBalls}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'dotBalls', parseInt(e.target.value) || 0)
-                            }
-                            className="w-14 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'dotBalls', parseInt(e.target.value) || 0)}
+                            className="w-14 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-green-500/5">
                           <input
                             type="number"
                             value={score.lbwBowledDismissals}
-                            onChange={e =>
-                              handleScoreChange(
-                                c.id,
-                                'lbwBowledDismissals',
-                                parseInt(e.target.value) || 0
-                              )
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'lbwBowledDismissals', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        {/* Fielding Stats */}
+                        <td className="px-2 py-3 bg-orange-500/5">
                           <input
                             type="number"
                             value={score.catches}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'catches', parseInt(e.target.value) || 0)
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'catches', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-orange-500/5">
                           <input
                             type="number"
                             value={score.stumpings}
-                            onChange={e =>
-                              handleScoreChange(c.id, 'stumpings', parseInt(e.target.value) || 0)
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'stumpings', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-orange-500/5">
                           <input
                             type="number"
                             value={score.directRunouts}
-                            onChange={e =>
-                              handleScoreChange(
-                                c.id,
-                                'directRunouts',
-                                parseInt(e.target.value) || 0
-                              )
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'directRunouts', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-3 bg-orange-500/5">
                           <input
                             type="number"
                             value={score.indirectRunouts}
-                            onChange={e =>
-                              handleScoreChange(
-                                c.id,
-                                'indirectRunouts',
-                                parseInt(e.target.value) || 0
-                              )
-                            }
-                            className="w-12 px-1 py-1 border rounded text-center"
+                            onChange={e => handleScoreChange(c.id, 'indirectRunouts', parseInt(e.target.value) || 0)}
+                            className="w-12 px-2 py-1.5 text-center font-mono text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-1 focus:ring-[var(--accent-gold)] focus:outline-none"
                             min={0}
                           />
                         </td>
@@ -506,70 +574,96 @@ export default function GameScoring() {
                 </tbody>
               </table>
             </div>
+            {/* Legend */}
+            <div className="px-6 py-4 border-t border-[var(--glass-border)] bg-[var(--bg-tertiary)]/30">
+              <div className="flex flex-wrap gap-6 text-xs text-[var(--text-tertiary)]">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded bg-blue-500/20"></div>
+                  <span>Batting Stats</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded bg-green-500/20"></div>
+                  <span>Bowling Stats</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded bg-orange-500/20"></div>
+                  <span>Fielding Stats</span>
+                </div>
+              </div>
+            </div>
           </div>
+        ) : cricketers.length === 0 ? (
+          <NoPlayersEmpty />
+        ) : (
+          <NoMatchesEmpty onCreateMatch={() => setShowCreateMatch(true)} />
         )}
-
-        {cricketers.length === 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <p className="text-gray-500">No players have been picked yet.</p>
-          </div>
-        )}
-      </div>
+      </main>
 
       {/* Create Match Modal */}
       {showCreateMatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Create New Match</h2>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card-glow p-6 w-full max-w-md animate-scale-in">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--accent-gold)] to-[var(--accent-gold-dim)] flex items-center justify-center">
+                <svg className="w-6 h-6 text-[var(--bg-deep)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-display text-[var(--text-primary)]">Create New Match</h2>
+                <p className="text-sm text-[var(--text-tertiary)]">Add match details</p>
+              </div>
+            </div>
             <form onSubmit={handleCreateMatch}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Match Number
                   </label>
                   <input
                     type="number"
                     value={newMatch.matchNumber}
-                    onChange={e =>
-                      setNewMatch({ ...newMatch, matchNumber: parseInt(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    onChange={e => setNewMatch({ ...newMatch, matchNumber: parseInt(e.target.value) })}
+                    className="w-full px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-2 focus:ring-[var(--accent-gold)]/20 focus:outline-none transition-all"
                     min={1}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Team 1
                   </label>
                   <input
                     type="text"
                     value={newMatch.team1}
                     onChange={e => setNewMatch({ ...newMatch, team1: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-gold)] focus:ring-2 focus:ring-[var(--accent-gold)]/20 focus:outline-none transition-all"
                     placeholder="e.g., Mumbai Indians"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Team 2
                   </label>
                   <input
                     type="text"
                     value={newMatch.team2}
                     onChange={e => setNewMatch({ ...newMatch, team2: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-gold)] focus:ring-2 focus:ring-[var(--accent-gold)]/20 focus:outline-none transition-all"
                     placeholder="e.g., Chennai Super Kings"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Match Date
                   </label>
                   <input
                     type="date"
                     value={newMatch.matchDate}
                     onChange={e => setNewMatch({ ...newMatch, matchDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:ring-2 focus:ring-[var(--accent-gold)]/20 focus:outline-none transition-all"
                   />
                 </div>
               </div>
@@ -577,17 +671,19 @@ export default function GameScoring() {
                 <button
                   type="button"
                   onClick={() => setShowCreateMatch(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  className="btn-ghost flex-1"
                 >
                   Cancel
                 </button>
-                <button
+                <LoadingButton
                   type="submit"
+                  isLoading={isCreatingMatch}
+                  loadingText="Creating..."
                   disabled={!newMatch.team1 || !newMatch.team2}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1"
                 >
-                  Create
-                </button>
+                  Create Match
+                </LoadingButton>
               </div>
             </form>
           </div>

@@ -1,32 +1,35 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useForm } from '../hooks/useForm';
+import { loginSchema, type LoginInput } from '../validation/schemas';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      await login(email, password);
-      navigate('/auction');
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message :
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Login failed. Please try again.';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
+  const initialValues: LoginInput = {
+    email: '',
+    password: '',
   };
+
+  const form = useForm({
+    schema: loginSchema,
+    initialValues,
+    onSubmit: async (values) => {
+      setError('');
+      try {
+        await login(values.email, values.password);
+        navigate('/auction');
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message :
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Login failed. Please try again.';
+        setError(errorMessage);
+      }
+    },
+  });
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 relative overflow-hidden">
@@ -67,7 +70,7 @@ export default function Login() {
             <p className="text-slate-500 text-sm mt-1 font-body">Sign in to continue to your league</p>
           </div>
 
-          {/* Error Message */}
+          {/* Server Error Message */}
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 animate-scale-in">
               <div className="flex items-center gap-3">
@@ -82,7 +85,7 @@ export default function Login() {
           )}
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={form.handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="email" className="input-label">
                 Email Address
@@ -96,13 +99,14 @@ export default function Login() {
                 <input
                   id="email"
                   type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pl-12"
+                  {...form.getFieldProps('email')}
+                  className={`input-field pl-12 ${form.getFieldState('email').hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                   placeholder="you@example.com"
                 />
               </div>
+              {form.getFieldState('email').hasError && (
+                <p className="text-sm text-red-400 animate-slide-up">{form.getFieldState('email').error}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -118,21 +122,22 @@ export default function Login() {
                 <input
                   id="password"
                   type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pl-12"
+                  {...form.getFieldProps('password')}
+                  className={`input-field pl-12 ${form.getFieldState('password').hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                   placeholder="Enter your password"
                 />
               </div>
+              {form.getFieldState('password').hasError && (
+                <p className="text-sm text-red-400 animate-slide-up">{form.getFieldState('password').error}</p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={form.isSubmitting}
               className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isLoading ? (
+              {form.isSubmitting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                   Signing In...

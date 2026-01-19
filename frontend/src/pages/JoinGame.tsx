@@ -1,15 +1,23 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { gamesApi } from '../services/api';
+import { useToast } from '../context/ToastContext';
+import { gameCodeSchema } from '../validation/schemas';
 import type { Game } from '../types';
+import Skeleton from '../components/ui/Skeleton';
+import { LoadingButton } from '../components/ui/LoadingSpinner';
+import EmptyState from '../components/ui/EmptyState';
 
 export default function JoinGame() {
   const [joinableGames, setJoinableGames] = useState<Game[]>([]);
   const [gameCode, setGameCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [joiningGameId, setJoiningGameId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const toast = useToast();
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     loadJoinableGames();
@@ -22,131 +30,260 @@ export default function JoinGame() {
       setJoinableGames(response.data);
     } catch (err) {
       console.error('Failed to load games:', err);
+      toast.error('Failed to load games');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleCodeChange = (index: number, value: string) => {
+    if (value.length > 1) {
+      // Handle paste
+      const pasted = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      setGameCode(pasted);
+      if (pasted.length === 6) {
+        inputRefs.current[5]?.focus();
+      } else {
+        inputRefs.current[pasted.length]?.focus();
+      }
+      return;
+    }
+
+    const char = value.toUpperCase();
+    if (char && !/^[A-Z0-9]$/.test(char)) return;
+
+    const newCode = gameCode.split('');
+    newCode[index] = char;
+    setGameCode(newCode.join(''));
+
+    // Auto-focus next input
+    if (char && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !gameCode[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const validateCode = (code: string): boolean => {
+    const result = gameCodeSchema.safeParse({ code });
+    if (!result.success) {
+      setCodeError(result.error.issues[0]?.message || 'Invalid code');
+      return false;
+    }
+    setCodeError(null);
+    return true;
+  };
+
   const handleJoinByCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!gameCode.trim()) return;
+    if (!validateCode(gameCode)) return;
 
     try {
       setIsJoining(true);
-      setError(null);
-      const response = await gamesApi.joinByCode(gameCode.trim().toUpperCase());
+      const response = await gamesApi.joinByCode(gameCode);
+      toast.success('Joined game!', `Welcome to ${response.data.game.name}`);
       navigate(`/game/${response.data.game.id}/lobby`);
     } catch (err: unknown) {
       const errorMessage =
-        err instanceof Error
-          ? err.message
-          : (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-            'Failed to join game';
-      setError(errorMessage);
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to join game. Check the code and try again.';
+      toast.error('Failed to join', errorMessage);
     } finally {
       setIsJoining(false);
     }
   };
 
-  const handleJoinById = async (gameId: string) => {
+  const handleJoinById = async (gameId: string, gameName: string) => {
     try {
-      setIsJoining(true);
-      setError(null);
+      setJoiningGameId(gameId);
       await gamesApi.joinById(gameId);
+      toast.success('Joined game!', `Welcome to ${gameName}`);
       navigate(`/game/${gameId}/lobby`);
     } catch (err: unknown) {
       const errorMessage =
-        err instanceof Error
-          ? err.message
-          : (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-            'Failed to join game';
-      setError(errorMessage);
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to join game';
+      toast.error('Failed to join', errorMessage);
     } finally {
-      setIsJoining(false);
+      setJoiningGameId(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-4 mb-8">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            ← Back
-          </button>
-          <h1 className="text-3xl font-bold text-gray-900">Join Game</h1>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-6">
-            {error}
-            <button onClick={() => setError(null)} className="ml-4 text-red-900 underline">
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Join by Code */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Join with Code</h2>
-          <form onSubmit={handleJoinByCode} className="flex gap-4">
-            <input
-              type="text"
-              value={gameCode}
-              onChange={e => setGameCode(e.target.value.toUpperCase())}
-              placeholder="Enter 6-character code"
-              maxLength={6}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-center text-xl font-mono tracking-widest focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={gameCode.length !== 6 || isJoining}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="border-b border-[var(--glass-border)] bg-[var(--bg-secondary)]/50 backdrop-blur-md">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center h-16 gap-4">
+            <Link
+              to="/dashboard"
+              className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
             >
-              {isJoining ? 'Joining...' : 'Join'}
-            </button>
-          </form>
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5m7-7-7 7 7 7"/>
+              </svg>
+              Back
+            </Link>
+            <div className="h-6 w-px bg-[var(--glass-border)]" />
+            <h1 className="text-xl font-display text-[var(--text-primary)]">Join Game</h1>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Join by Code */}
+        <div className="glass-card-glow p-8 mb-8 relative overflow-hidden">
+          <div className="absolute inset-0 bg-pattern-grid opacity-20" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--accent-gold)] to-[var(--accent-gold-dim)] flex items-center justify-center">
+                <svg className="w-6 h-6 text-[var(--bg-deep)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-display text-[var(--text-primary)]">Enter Game Code</h2>
+                <p className="text-sm text-[var(--text-tertiary)]">Get the 6-character code from the host</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleJoinByCode}>
+              <div className="flex justify-center gap-2 sm:gap-3 mb-2">
+                {[0, 1, 2, 3, 4, 5].map(i => (
+                  <input
+                    key={i}
+                    ref={el => { inputRefs.current[i] = el; }}
+                    type="text"
+                    maxLength={6}
+                    value={gameCode[i] || ''}
+                    onChange={e => {
+                      handleCodeChange(i, e.target.value);
+                      setCodeError(null);
+                    }}
+                    onKeyDown={e => handleKeyDown(i, e)}
+                    onFocus={e => e.target.select()}
+                    className={`w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-mono font-bold
+                      bg-[var(--bg-tertiary)] border-2 rounded-xl
+                      text-[var(--text-primary)] focus:ring-2
+                      focus:outline-none transition-all placeholder:text-[var(--text-muted)]
+                      ${codeError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-[var(--glass-border)] focus:border-[var(--accent-gold)] focus:ring-[var(--accent-gold)]/20'}`}
+                    placeholder="•"
+                  />
+                ))}
+              </div>
+              {codeError && (
+                <p className="text-center text-sm text-red-400 mb-4 animate-slide-up">{codeError}</p>
+              )}
+              {!codeError && <div className="mb-4" />}
+
+              <LoadingButton
+                type="submit"
+                isLoading={isJoining}
+                loadingText="Joining..."
+                disabled={gameCode.length !== 6}
+                className="w-full"
+              >
+                Join Game
+              </LoadingButton>
+            </form>
+          </div>
         </div>
 
         {/* Browse Games */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Browse Open Games</h2>
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--accent-cyan)]/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-[var(--accent-cyan)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="m21 21-4.35-4.35"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-display text-[var(--text-primary)]">Browse Open Games</h2>
+                <p className="text-sm text-[var(--text-tertiary)]">Find games accepting new players</p>
+              </div>
+            </div>
+            <button
+              onClick={loadJoinableGames}
+              className="btn-ghost text-sm flex items-center gap-2"
+              disabled={isLoading}
+            >
+              <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 4v6h-6M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
 
           {isLoading ? (
-            <div className="text-center py-8 text-gray-500">Loading games...</div>
-          ) : joinableGames.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No open games available. Ask the host for a game code.
-            </div>
-          ) : (
             <div className="space-y-4">
-              {joinableGames.map(game => (
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-xl">
+                  <div className="flex-1">
+                    <Skeleton width="60%" height={20} className="mb-2" />
+                    <Skeleton width="40%" height={16} />
+                  </div>
+                  <Skeleton width={80} height={36} />
+                </div>
+              ))}
+            </div>
+          ) : joinableGames.length === 0 ? (
+            <EmptyState
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M9 9h.01M15 9h.01M9 15c.83.67 1.83 1 3 1s2.17-.33 3-1"/>
+                </svg>
+              }
+              title="No Open Games"
+              message="There are no games currently accepting players. Ask a host for a game code or create your own."
+            />
+          ) : (
+            <div className="space-y-3">
+              {joinableGames.map((game, i) => (
                 <div
                   key={game.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  className="flex items-center justify-between p-4 border border-[var(--glass-border)]
+                    rounded-xl hover:border-[var(--accent-gold)]/30 hover:bg-[var(--bg-tertiary)]/50
+                    transition-all animate-slide-up"
+                  style={{ animationDelay: `${i * 0.05}s` }}
                 >
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{game.name}</h3>
-                    <p className="text-sm text-gray-600">
-                      Hosted by {game.creator?.name || 'Unknown'} •{' '}
-                      {game._count?.participants || 0} participants
-                    </p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--accent-purple)]/20 to-[var(--accent-cyan)]/20
+                      flex items-center justify-center">
+                      <span className="text-xl">🏏</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-[var(--text-primary)]">{game.name}</h3>
+                      <p className="text-sm text-[var(--text-tertiary)]">
+                        Hosted by <span className="text-[var(--text-secondary)]">{game.creator?.name || 'Unknown'}</span>
+                        <span className="mx-2">•</span>
+                        <span className="text-[var(--accent-cyan)]">{game._count?.participants || 0}</span> players
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleJoinById(game.id)}
-                    disabled={isJoining}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  <LoadingButton
+                    onClick={() => handleJoinById(game.id, game.name)}
+                    isLoading={joiningGameId === game.id}
+                    loadingText="..."
+                    variant="secondary"
+                    className="text-sm px-4 py-2"
                   >
                     Join
-                  </button>
+                  </LoadingButton>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

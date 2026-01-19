@@ -1,45 +1,39 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useForm } from '../hooks/useForm';
+import { registerSchema, type RegisterInput } from '../validation/schemas';
 
 export default function Register() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      await register(email, password, name);
-      navigate('/setup');
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message :
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Registration failed. Please try again.';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
+  const initialValues: RegisterInput = {
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   };
+
+  const form = useForm({
+    schema: registerSchema,
+    initialValues,
+    onSubmit: async (values) => {
+      setError('');
+      try {
+        await register(values.email, values.password, values.name);
+        navigate('/setup');
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message :
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Registration failed. Please try again.';
+        setError(errorMessage);
+      }
+    },
+  });
+
+  const password = form.values.password;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 relative overflow-hidden">
@@ -74,7 +68,7 @@ export default function Register() {
 
         {/* Register Card */}
         <div className="glass-card p-8 animate-scale-in" style={{ animationDelay: '0.1s' }}>
-          {/* Error Message */}
+          {/* Server Error Message */}
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 animate-scale-in">
               <div className="flex items-center gap-3">
@@ -89,7 +83,7 @@ export default function Register() {
           )}
 
           {/* Register Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={form.handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <label htmlFor="name" className="input-label">
                 Your Name
@@ -103,13 +97,14 @@ export default function Register() {
                 <input
                   id="name"
                   type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="input-field pl-12"
+                  {...form.getFieldProps('name')}
+                  className={`input-field pl-12 ${form.getFieldState('name').hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                   placeholder="Your display name"
                 />
               </div>
+              {form.getFieldState('name').hasError && (
+                <p className="text-sm text-red-400 animate-slide-up">{form.getFieldState('name').error}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -125,13 +120,14 @@ export default function Register() {
                 <input
                   id="email"
                   type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pl-12"
+                  {...form.getFieldProps('email')}
+                  className={`input-field pl-12 ${form.getFieldState('email').hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                   placeholder="you@example.com"
                 />
               </div>
+              {form.getFieldState('email').hasError && (
+                <p className="text-sm text-red-400 animate-slide-up">{form.getFieldState('email').error}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -148,13 +144,14 @@ export default function Register() {
                   <input
                     id="password"
                     type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input-field pl-12 pr-4"
+                    {...form.getFieldProps('password')}
+                    className={`input-field pl-12 pr-4 ${form.getFieldState('password').hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                     placeholder="Min 6 chars"
                   />
                 </div>
+                {form.getFieldState('password').hasError && (
+                  <p className="text-sm text-red-400 animate-slide-up">{form.getFieldState('password').error}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -170,13 +167,14 @@ export default function Register() {
                   <input
                     id="confirmPassword"
                     type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="input-field pl-12 pr-4"
+                    {...form.getFieldProps('confirmPassword')}
+                    className={`input-field pl-12 pr-4 ${form.getFieldState('confirmPassword').hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
                     placeholder="Repeat"
                   />
                 </div>
+                {form.getFieldState('confirmPassword').hasError && (
+                  <p className="text-sm text-red-400 animate-slide-up">{form.getFieldState('confirmPassword').error}</p>
+                )}
               </div>
             </div>
 
@@ -197,10 +195,10 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={form.isSubmitting}
               className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mt-6"
             >
-              {isLoading ? (
+              {form.isSubmitting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                   Creating Account...
