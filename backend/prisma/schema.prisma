@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  player
+  auctioneer
+}
+
+enum PlayerType {
+  batsman
+  bowler
+  wicketkeeper
+  allrounder
+}
+
+enum AuctionStatus {
+  not_started
+  in_progress
+  paused
+  completed
+}
+
+enum LeagueMode {
+  pre_auction
+  auction
+  scoring
+  subs
+  report
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password        String
+  name            String
+  teamName        String?
+  avatarUrl       String?
+  role            UserRole  @default(player)
+  budgetRemaining Float     @default(200.00)
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  cricketers      Cricketer[]  @relation("PickedBy")
+  bids            Bid[]
+  substitutions   Substitution[]
+  highBidAuction  AuctionState? @relation("HighBidder")
+  currentSubTurn  LeagueState?  @relation("CurrentSubUser")
+
+  @@map("users")
+}
+
+model Cricketer {
+  id              String      @id @default(uuid())
+  firstName       String
+  lastName        String
+  playerType      PlayerType
+  isForeign       Boolean     @default(false)
+  iplTeam         String
+  battingRecord   Json?
+  bowlingRecord   Json?
+  pictureUrl      String?
+  newsArticles    Json?       @default("[]")
+  isPicked        Boolean     @default(false)
+  pickedByUserId  String?
+  pricePaid       Float?
+  pickOrder       Int?
+  wasSkipped      Boolean     @default(false)
+  auctionOrder    Int?
+
+  // Relations
+  pickedBy           User?              @relation("PickedBy", fields: [pickedByUserId], references: [id])
+  bids               Bid[]
+  matchScores        PlayerMatchScore[]
+  currentAuction     AuctionState?      @relation("CurrentCricketer")
+  substitutionsOut   Substitution[]     @relation("SubOut")
+  substitutionsIn    Substitution[]     @relation("SubIn")
+
+  @@map("cricketers")
+}
+
+model Bid {
+  id          String   @id @default(uuid())
+  cricketerId String
+  userId      String
+  amount      Float
+  timestamp   DateTime @default(now())
+
+  // Relations
+  cricketer Cricketer @relation(fields: [cricketerId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("bids")
+}
+
+model Match {
+  id              String   @id @default(uuid())
+  matchNumber     Int      @unique
+  team1           String
+  team2           String
+  matchDate       DateTime
+  scoresPopulated Boolean  @default(false)
+  isAutoPopulated Boolean  @default(false)
+
+  // Relations
+  scores PlayerMatchScore[]
+
+  @@map("matches")
+}
+
+model PlayerMatchScore {
+  id                   String   @id @default(uuid())
+  matchId              String
+  cricketerId          String
+  inPlayingXi          Boolean  @default(true)
+  runs                 Int      @default(0)
+  ballsFaced           Int      @default(0)
+  fours                Int      @default(0)
+  sixes                Int      @default(0)
+  wickets              Int      @default(0)
+  oversBowled          Float    @default(0)
+  runsConceded         Int      @default(0)
+  maidens              Int      @default(0)
+  dotBalls             Int      @default(0)
+  catches              Int      @default(0)
+  stumpings            Int      @default(0)
+  directRunouts        Int      @default(0)
+  indirectRunouts      Int      @default(0)
+  dismissalType        String?
+  lbwBowledDismissals  Int      @default(0)
+  calculatedPoints     Int      @default(0)
+
+  // Relations
+  match     Match     @relation(fields: [matchId], references: [id])
+  cricketer Cricketer @relation(fields: [cricketerId], references: [id])
+
+  @@unique([matchId, cricketerId])
+  @@map("player_match_scores")
+}
+
+model Substitution {
+  id                String   @id @default(uuid())
+  userId            String
+  subOutCricketerId String
+  subInCricketerId  String
+  subRound          Int
+  createdAt         DateTime @default(now())
+
+  // Relations
+  user         User      @relation(fields: [userId], references: [id])
+  subOutPlayer Cricketer @relation("SubOut", fields: [subOutCricketerId], references: [id])
+  subInPlayer  Cricketer @relation("SubIn", fields: [subInCricketerId], references: [id])
+
+  @@map("substitutions")
+}
+
+model AuctionState {
+  id                   String        @id @default(uuid())
+  currentCricketerId   String?       @unique
+  auctionStatus        AuctionStatus @default(not_started)
+  timerEndTime         DateTime?
+  timerPausedAt        DateTime?
+  currentHighBid       Float         @default(0)
+  currentHighBidderId  String?       @unique
+  isFirstRound         Boolean       @default(true)
+
+  // Relations
+  currentCricketer  Cricketer? @relation("CurrentCricketer", fields: [currentCricketerId], references: [id])
+  currentHighBidder User?      @relation("HighBidder", fields: [currentHighBidderId], references: [id])
+
+  @@map("auction_state")
+}
+
+model LeagueState {
+  id                String     @id @default(uuid())
+  mode              LeagueMode @default(pre_auction)
+  subsPeriodActive  Boolean    @default(false)
+  currentSubUserId  String?    @unique
+  currentSubRound   Int?
+
+  // Relations
+  currentSubUser User? @relation("CurrentSubUser", fields: [currentSubUserId], references: [id])
+
+  @@map("league_state")
+}
