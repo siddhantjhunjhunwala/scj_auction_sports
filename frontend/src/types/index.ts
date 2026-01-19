@@ -2,6 +2,7 @@ export type UserRole = 'player' | 'auctioneer';
 export type PlayerType = 'batsman' | 'bowler' | 'wicketkeeper' | 'allrounder';
 export type AuctionStatus = 'not_started' | 'in_progress' | 'paused' | 'completed';
 export type LeagueMode = 'pre_auction' | 'auction' | 'scoring' | 'subs' | 'report';
+export type GameStatus = 'pre_auction' | 'auction_active' | 'auction_paused' | 'auction_ended' | 'scoring' | 'completed';
 
 export interface User {
   id: string;
@@ -165,4 +166,228 @@ export interface ReportData {
     color: string;
     points: number[];
   }[];
+}
+
+// Multi-Game Types
+export interface Game {
+  id: string;
+  name: string;
+  code: string;
+  createdById: string;
+  status: GameStatus;
+  joiningAllowed: boolean;
+  cricketersUploaded: boolean;
+  createdAt: string;
+  creator?: {
+    id: string;
+    name: string;
+    email?: string;
+    teamName?: string;
+    avatarUrl?: string | null;
+  };
+  participants?: GameParticipant[];
+  pointsConfig?: PointSystemConfig;
+  _count?: {
+    participants: number;
+    cricketers: number;
+    matches?: number;
+  };
+  isCreator?: boolean;
+}
+
+export interface GameParticipant {
+  id: string;
+  gameId: string;
+  userId: string;
+  budgetRemaining: number;
+  joinedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email?: string;
+    teamName?: string;
+    avatarUrl?: string | null;
+  };
+  cricketers?: GameCricketer[];
+}
+
+export interface GameCricketer {
+  id: string;
+  gameId: string;
+  firstName: string;
+  lastName: string;
+  playerType: PlayerType;
+  isForeign: boolean;
+  iplTeam: string;
+  battingRecord: BattingRecord | null;
+  bowlingRecord: BowlingRecord | null;
+  pictureUrl: string | null;
+  isPicked: boolean;
+  pickedByParticipantId: string | null;
+  pricePaid: number | null;
+  pickOrder: number | null;
+  wasSkipped: boolean;
+  auctionOrder: number | null;
+  pickedBy?: GameParticipant;
+}
+
+export interface GameAuctionState {
+  id: string;
+  gameId: string;
+  currentCricketerId: string | null;
+  auctionStatus: AuctionStatus;
+  timerEndTime: string | null;
+  timerPausedAt: string | null;
+  currentHighBid: number;
+  currentHighBidderId: string | null;
+  isFirstRound: boolean;
+  currentBiddingLog: BidLogEntry[];
+  lastWinMessage: string | null;
+  currentCricketer?: GameCricketer | null;
+  currentHighBidder?: {
+    id: string;
+    budgetRemaining: number;
+    user?: {
+      id: string;
+      name: string;
+      teamName?: string;
+      avatarUrl?: string | null;
+    };
+  } | null;
+}
+
+export interface BidLogEntry {
+  participantId: string;
+  teamName: string;
+  amount: number;
+  timestamp: string;
+}
+
+export interface GameMatch {
+  id: string;
+  gameId: string;
+  matchNumber: number;
+  team1: string;
+  team2: string;
+  matchDate: string;
+  scoresPopulated: boolean;
+  isAutoPopulated: boolean;
+}
+
+export interface GamePlayerMatchScore {
+  id: string;
+  gameMatchId: string;
+  cricketerId: string;
+  inPlayingXi: boolean;
+  runs: number;
+  ballsFaced: number;
+  fours: number;
+  sixes: number;
+  wickets: number;
+  oversBowled: number;
+  runsConceded: number;
+  maidens: number;
+  dotBalls: number;
+  catches: number;
+  stumpings: number;
+  directRunouts: number;
+  indirectRunouts: number;
+  dismissalType: string | null;
+  lbwBowledDismissals: number;
+  calculatedPoints: number;
+  cricketer?: GameCricketer;
+}
+
+export interface PointSystemConfig {
+  id: string;
+  gameId: string;
+  // Batting
+  runPoints: number;
+  fourBonus: number;
+  sixBonus: number;
+  runs25Bonus: number;
+  runs50Bonus: number;
+  runs75Bonus: number;
+  runs100Bonus: number;
+  duckPenalty: number;
+  sr130Bonus: number;
+  sr150Bonus: number;
+  sr170Bonus: number;
+  // Bowling
+  wicketPoints: number;
+  lbwBowledBonus: number;
+  maidenPoints: number;
+  dotBallPoints: number;
+  wickets3Bonus: number;
+  wickets4Bonus: number;
+  wickets5Bonus: number;
+  econ5Bonus: number;
+  econ6Bonus: number;
+  econ7Bonus: number;
+  // Fielding
+  catchPoints: number;
+  catches3Bonus: number;
+  stumpingPoints: number;
+  directRunout: number;
+  indirectRunout: number;
+  playingXiBonus: number;
+}
+
+export interface GameLeaderboardEntry {
+  rank: number;
+  participant: {
+    id: string;
+    user: {
+      id: string;
+      name: string;
+      teamName?: string;
+      avatarUrl?: string | null;
+    };
+    budgetRemaining: number;
+  };
+  totalPoints: number;
+  pointsByMatch: {
+    matchNumber: number;
+    points: number;
+  }[];
+  teamSize: number;
+}
+
+export interface GameLeaderboard {
+  leaderboard: GameLeaderboardEntry[];
+  matchCount: number;
+  upToMatch: number;
+}
+
+export interface PlayerDashboardData {
+  participant: {
+    id: string;
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      teamName?: string;
+      avatarUrl?: string | null;
+    };
+    budgetRemaining: number;
+  };
+  totalPoints: number;
+  rank: number;
+  totalParticipants: number;
+  playerStats: {
+    cricketer: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      playerType: PlayerType;
+      isForeign: boolean;
+      iplTeam: string;
+      pricePaid: number | null;
+    };
+    totalPoints: number;
+    matchesPlayed: number;
+    pointsPerMatch: number;
+    valueRatio: number;
+  }[];
+  matchCount: number;
 }

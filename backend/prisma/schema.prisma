@@ -35,6 +35,15 @@ enum LeagueMode {
   report
 }
 
+enum GameStatus {
+  pre_auction
+  auction_active
+  auction_paused
+  auction_ended
+  scoring
+  completed
+}
+
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
@@ -52,6 +61,10 @@ model User {
   substitutions   Substitution[]
   highBidAuction  AuctionState? @relation("HighBidder")
   currentSubTurn  LeagueState?  @relation("CurrentSubUser")
+
+  // Multi-game relations
+  createdGames       Game[]           @relation("GameCreator")
+  gameParticipations GameParticipant[]
 
   @@map("users")
 }
@@ -188,4 +201,203 @@ model LeagueState {
   currentSubUser User? @relation("CurrentSubUser", fields: [currentSubUserId], references: [id])
 
   @@map("league_state")
+}
+
+// ========================
+// MULTI-GAME MODELS
+// ========================
+
+model Game {
+  id                 String      @id @default(uuid())
+  name               String
+  code               String      @unique
+  createdById        String
+  status             GameStatus  @default(pre_auction)
+  joiningAllowed     Boolean     @default(true)
+  cricketersUploaded Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+
+  // Relations
+  creator       User              @relation("GameCreator", fields: [createdById], references: [id])
+  participants  GameParticipant[]
+  cricketers    GameCricketer[]
+  auctionState  GameAuctionState?
+  bids          GameBid[]
+  matches       GameMatch[]
+  pointsConfig  PointSystemConfig?
+
+  @@map("games")
+}
+
+model GameParticipant {
+  id              String   @id @default(uuid())
+  gameId          String
+  userId          String
+  budgetRemaining Float    @default(200.00)
+  joinedAt        DateTime @default(now())
+
+  // Relations
+  game       Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id])
+  cricketers GameCricketer[] @relation("PickedByParticipant")
+  bids       GameBid[]
+
+  @@unique([gameId, userId])
+  @@map("game_participants")
+}
+
+model GameCricketer {
+  id            String     @id @default(uuid())
+  gameId        String
+  firstName     String
+  lastName      String
+  playerType    PlayerType
+  isForeign     Boolean    @default(false)
+  iplTeam       String
+  battingRecord Json?
+  bowlingRecord Json?
+  pictureUrl    String?
+
+  isPicked              Boolean  @default(false)
+  pickedByParticipantId String?
+  pricePaid             Float?
+  pickOrder             Int?
+  wasSkipped            Boolean  @default(false)
+  auctionOrder          Int?
+
+  // Relations
+  game           Game              @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  pickedBy       GameParticipant?  @relation("PickedByParticipant", fields: [pickedByParticipantId], references: [id])
+  bids           GameBid[]
+  matchScores    GamePlayerMatchScore[]
+  currentAuction GameAuctionState? @relation("CurrentGameCricketer")
+
+  @@map("game_cricketers")
+}
+
+model GameAuctionState {
+  id                   String        @id @default(uuid())
+  gameId               String        @unique
+  currentCricketerId   String?       @unique
+  auctionStatus        AuctionStatus @default(not_started)
+  timerEndTime         DateTime?
+  timerPausedAt        DateTime?
+  currentHighBid       Float         @default(0)
+  currentHighBidderId  String?
+  isFirstRound         Boolean       @default(true)
+  currentBiddingLog    Json          @default("[]")
+  lastWinMessage       String?
+
+  // Relations
+  game             Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  currentCricketer GameCricketer? @relation("CurrentGameCricketer", fields: [currentCricketerId], references: [id])
+
+  @@map("game_auction_states")
+}
+
+model GameBid {
+  id            String   @id @default(uuid())
+  gameId        String
+  cricketerId   String
+  participantId String
+  amount        Float
+  timestamp     DateTime @default(now())
+
+  // Relations
+  game        Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  cricketer   GameCricketer   @relation(fields: [cricketerId], references: [id])
+  participant GameParticipant @relation(fields: [participantId], references: [id])
+
+  @@map("game_bids")
+}
+
+model GameMatch {
+  id              String   @id @default(uuid())
+  gameId          String
+  matchNumber     Int
+  team1           String
+  team2           String
+  matchDate       DateTime
+  scoresPopulated Boolean  @default(false)
+  isAutoPopulated Boolean  @default(false)
+
+  // Relations
+  game   Game                   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  scores GamePlayerMatchScore[]
+
+  @@unique([gameId, matchNumber])
+  @@map("game_matches")
+}
+
+model GamePlayerMatchScore {
+  id                  String  @id @default(uuid())
+  gameMatchId         String
+  cricketerId         String
+  inPlayingXi         Boolean @default(true)
+  runs                Int     @default(0)
+  ballsFaced          Int     @default(0)
+  fours               Int     @default(0)
+  sixes               Int     @default(0)
+  wickets             Int     @default(0)
+  oversBowled         Float   @default(0)
+  runsConceded        Int     @default(0)
+  maidens             Int     @default(0)
+  dotBalls            Int     @default(0)
+  catches             Int     @default(0)
+  stumpings           Int     @default(0)
+  directRunouts       Int     @default(0)
+  indirectRunouts     Int     @default(0)
+  dismissalType       String?
+  lbwBowledDismissals Int     @default(0)
+  calculatedPoints    Int     @default(0)
+
+  // Relations
+  match     GameMatch     @relation(fields: [gameMatchId], references: [id], onDelete: Cascade)
+  cricketer GameCricketer @relation(fields: [cricketerId], references: [id])
+
+  @@unique([gameMatchId, cricketerId])
+  @@map("game_player_match_scores")
+}
+
+model PointSystemConfig {
+  id     String @id @default(uuid())
+  gameId String @unique
+
+  // Batting
+  runPoints    Int @default(1)
+  fourBonus    Int @default(4)
+  sixBonus     Int @default(6)
+  runs25Bonus  Int @default(4)
+  runs50Bonus  Int @default(8)
+  runs75Bonus  Int @default(12)
+  runs100Bonus Int @default(16)
+  duckPenalty  Int @default(-2)
+  sr130Bonus   Int @default(2)
+  sr150Bonus   Int @default(4)
+  sr170Bonus   Int @default(6)
+
+  // Bowling
+  wicketPoints   Int @default(25)
+  lbwBowledBonus Int @default(8)
+  maidenPoints   Int @default(6)
+  dotBallPoints  Int @default(1)
+  wickets3Bonus  Int @default(4)
+  wickets4Bonus  Int @default(8)
+  wickets5Bonus  Int @default(12)
+  econ5Bonus     Int @default(6)
+  econ6Bonus     Int @default(4)
+  econ7Bonus     Int @default(2)
+
+  // Fielding
+  catchPoints    Int @default(8)
+  catches3Bonus  Int @default(4)
+  stumpingPoints Int @default(12)
+  directRunout   Int @default(12)
+  indirectRunout Int @default(6)
+  playingXiBonus Int @default(4)
+
+  // Relations
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@map("point_system_configs")
 }

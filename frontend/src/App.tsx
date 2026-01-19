@@ -1,13 +1,28 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { GameProvider } from './context/GameContext';
+
+// Auth Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+
+// Legacy Pages (kept for backwards compatibility)
 import Setup from './pages/Setup';
 import Auction from './pages/Auction';
 import Scoring from './pages/Scoring';
 import Subs from './pages/Subs';
 import Reports from './pages/Reports';
+
+// New Multi-Game Pages
+import AuctioneerDashboard from './pages/AuctioneerDashboard';
+import JoinGame from './pages/JoinGame';
+import GameLobby from './pages/GameLobby';
+import PointsConfig from './pages/PointsConfig';
+import GameAuction from './pages/GameAuction';
+import PlayerDashboard from './pages/PlayerDashboard';
+import Leaderboard from './pages/Leaderboard';
+import GameScoring from './pages/GameScoring';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -39,7 +54,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/auction" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -48,6 +63,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public Routes */}
       <Route
         path="/login"
         element={
@@ -64,6 +80,78 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+
+      {/* Main Dashboard */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <AuctioneerDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Join Game */}
+      <Route
+        path="/join"
+        element={
+          <ProtectedRoute>
+            <JoinGame />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Game-Specific Routes */}
+      <Route
+        path="/game/:gameId/lobby"
+        element={
+          <ProtectedRoute>
+            <GameLobby />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/points"
+        element={
+          <ProtectedRoute>
+            <PointsConfig />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/auction"
+        element={
+          <ProtectedRoute>
+            <GameAuction />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/dashboard"
+        element={
+          <ProtectedRoute>
+            <PlayerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/leaderboard"
+        element={
+          <ProtectedRoute>
+            <Leaderboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/scoring"
+        element={
+          <ProtectedRoute>
+            <GameScoring />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Legacy Routes (kept for backwards compatibility) */}
       <Route
         path="/setup"
         element={
@@ -104,8 +192,10 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route path="/" element={<Navigate to="/auction" replace />} />
-      <Route path="*" element={<Navigate to="/auction" replace />} />
+
+      {/* Default redirects */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
@@ -115,7 +205,9 @@ function App() {
     <Router>
       <AuthProvider>
         <SocketProvider>
-          <AppRoutes />
+          <GameProvider>
+            <AppRoutes />
+          </GameProvider>
         </SocketProvider>
       </AuthProvider>
     </Router>

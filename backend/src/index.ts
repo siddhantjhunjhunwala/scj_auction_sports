@@ -12,6 +12,9 @@ import leagueRoutes from './routes/league.js';
 import matchesRoutes from './routes/matches.js';
 import subsRoutes from './routes/subs.js';
 import reportsRoutes from './routes/reports.js';
+import gamesRoutes from './routes/games.js';
+import gameAuctionRoutes from './routes/gameAuction.js';
+import gameScoringRoutes from './routes/gameScoring.js';
 import { setupAuctionSocket } from './socket/auctionSocket.js';
 import { authMiddleware } from './middleware/auth.js';
 
@@ -46,6 +49,11 @@ app.use('/api/league', authMiddleware, leagueRoutes);
 app.use('/api/matches', authMiddleware, matchesRoutes);
 app.use('/api/subs', authMiddleware, subsRoutes);
 app.use('/api/reports', authMiddleware, reportsRoutes);
+
+// Multi-game routes
+app.use('/api/games', authMiddleware, gamesRoutes);
+app.use('/api/games', authMiddleware, gameAuctionRoutes);
+app.use('/api/games', authMiddleware, gameScoringRoutes);
 
 // Health check
 app.get('/health', (_, res) => {
