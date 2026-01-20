@@ -207,14 +207,28 @@ export const gamesApi = {
     api.get<GameParticipant[]>(`/games/${gameId}/participants`),
 
   // Cricketers
-  uploadCricketers: (gameId: string, file: File) => {
+  uploadCricketers: async (gameId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post<{ message: string; cricketers: GameCricketer[] }>(
-      `/games/${gameId}/cricketers/upload`,
-      formData,
-      { headers: {} }  // Let axios set Content-Type with boundary automatically
-    );
+    const token = localStorage.getItem('token');
+
+    // Use native fetch for file upload to avoid axios Content-Type issues
+    const response = await fetch(`${API_BASE_URL}/games/${gameId}/cricketers/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type - browser will set it with boundary for FormData
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+      throw new Error(error.message || 'Upload failed');
+    }
+
+    const data = await response.json();
+    return { data };
   },
 
   getCricketers: (gameId: string) =>
