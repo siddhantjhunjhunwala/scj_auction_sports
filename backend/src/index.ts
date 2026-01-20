@@ -88,10 +88,13 @@ app.get('/api/health', (_, res) => {
 setupAuctionSocket(io);
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-const HOST = '0.0.0.0';
 
-httpServer.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
+// Railway requires listening on 0.0.0.0
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server started successfully`);
+  console.log(`PORT: ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Health check available at /health`);
 });
 
 export { io };
