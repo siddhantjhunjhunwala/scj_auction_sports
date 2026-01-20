@@ -78,16 +78,20 @@ app.use('/api/achievements', authMiddleware, achievementsRoutes);
 
 // Health check
 app.get('/health', (_, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+app.get('/api/health', (_, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Setup Socket.io
 setupAuctionSocket(io);
 
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
+const HOST = '0.0.0.0';
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
 });
 
 export { io };
