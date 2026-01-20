@@ -478,32 +478,42 @@ router.post(
         return;
       }
 
-      const cricketers = parsed.data as Array<{
-        firstName?: string;
-        lastName?: string;
-        playerType?: string;
-        isForeign?: string;
-        iplTeam?: string;
-        battingRecord?: string;
-        bowlingRecord?: string;
-        pictureUrl?: string;
-      }>;
+      // Support both camelCase and snake_case CSV headers
+      const cricketers = parsed.data as Array<Record<string, string | undefined>>;
 
       // Validate and create cricketers
       const validCricketers = cricketers
-        .filter(c => c.firstName && c.lastName && c.playerType && c.iplTeam)
-        .map((c, index) => ({
-          gameId: id,
-          firstName: c.firstName!.trim(),
-          lastName: c.lastName!.trim(),
-          playerType: c.playerType!.toLowerCase() as 'batsman' | 'bowler' | 'wicketkeeper' | 'allrounder',
-          isForeign: c.isForeign?.toLowerCase() === 'true' || c.isForeign === '1',
-          iplTeam: c.iplTeam!.trim(),
-          battingRecord: c.battingRecord ? JSON.parse(c.battingRecord) : null,
-          bowlingRecord: c.bowlingRecord ? JSON.parse(c.bowlingRecord) : null,
-          pictureUrl: c.pictureUrl?.trim() || null,
-          auctionOrder: index + 1,
-        }));
+        .filter(c => {
+          const firstName = c.firstName || c.first_name;
+          const lastName = c.lastName || c.last_name;
+          const playerType = c.playerType || c.player_type;
+          const iplTeam = c.iplTeam || c.ipl_team;
+          return firstName && lastName && playerType && iplTeam;
+        })
+        .map((c, index) => {
+          const firstName = (c.firstName || c.first_name || '').trim();
+          const lastName = (c.lastName || c.last_name || '').trim();
+          const playerType = (c.playerType || c.player_type || '').toLowerCase() as 'batsman' | 'bowler' | 'wicketkeeper' | 'allrounder';
+          const isForeignStr = c.isForeign || c.is_foreign || '';
+          const isForeign = isForeignStr.toLowerCase() === 'true' || isForeignStr === '1';
+          const iplTeam = (c.iplTeam || c.ipl_team || '').trim();
+          const battingRecord = c.battingRecord || c.batting_record;
+          const bowlingRecord = c.bowlingRecord || c.bowling_record;
+          const pictureUrl = c.pictureUrl || c.picture_url;
+
+          return {
+            gameId: id,
+            firstName,
+            lastName,
+            playerType,
+            isForeign,
+            iplTeam,
+            battingRecord: battingRecord ? JSON.parse(battingRecord) : null,
+            bowlingRecord: bowlingRecord ? JSON.parse(bowlingRecord) : null,
+            pictureUrl: pictureUrl?.trim() || null,
+            auctionOrder: index + 1,
+          };
+        });
 
       // Delete existing cricketers for this game
       await prisma.gameCricketer.deleteMany({
