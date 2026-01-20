@@ -6,6 +6,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Log environment on startup
+console.log('===========================================');
+console.log('Fantasy IPL Backend Starting...');
+console.log('Node.js version:', process.version);
+console.log('PORT env:', process.env.PORT);
+console.log('DATABASE_URL set:', !!process.env.DATABASE_URL);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('===========================================');
+
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import cricketersRoutes from './routes/cricketers.js';
@@ -90,7 +99,20 @@ setupAuctionSocket(io);
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
+  console.log('===========================================');
+  console.log(`Server successfully started!`);
+  console.log(`Listening on: http://0.0.0.0:${PORT}`);
+  console.log(`Health check: http://0.0.0.0:${PORT}/health`);
+  console.log('===========================================');
+});
+
+// Handle uncaught errors
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 export { io };
