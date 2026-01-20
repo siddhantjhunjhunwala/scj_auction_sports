@@ -473,8 +473,12 @@ router.post(
       const csvText = req.file.buffer.toString('utf-8');
       const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-      if (parsed.errors.length > 0) {
-        res.status(400).json({ message: 'CSV parsing error', errors: parsed.errors });
+      // Only fail on fatal parsing errors, not field mismatch warnings
+      const fatalErrors = parsed.errors.filter(
+        (e: { type: string }) => e.type !== 'FieldMismatch'
+      );
+      if (fatalErrors.length > 0) {
+        res.status(400).json({ message: 'CSV parsing error', errors: fatalErrors });
         return;
       }
 
