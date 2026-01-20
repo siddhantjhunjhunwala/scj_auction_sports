@@ -9,13 +9,24 @@ import {
 } from '../middleware/gameAuth.js';
 import { validateBody } from '../middleware/validate.js';
 import { placeBidSchema, startAuctionSchema } from '../validation/schemas.js';
+import {
+  checkAuctionAchievements,
+  checkAuctionEndAchievements,
+} from '../services/achievementService.js';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-const TEAM_SIZE = 11;
+const TEAM_SIZE = 12;
 const MAX_FOREIGNERS = 4;
 const MIN_BUDGET_PER_PLAYER = 0.5;
+
+// Helper to safely get gameId from params
+function getGameId(params: Record<string, string | string[] | undefined>): string {
+  const gameId = params.gameId;
+  if (Array.isArray(gameId)) return gameId[0];
+  return gameId || '';
+}
 
 // Helper to get or create game auction state
 async function getGameAuctionState(gameId: string) {
@@ -100,7 +111,7 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const state = await getGameAuctionState(gameId);
       const formatted = await formatGameAuctionState(state);
       res.json(formatted);
@@ -119,7 +130,7 @@ router.post(
   validateBody(startAuctionSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const { cricketerId } = req.body;
       const io: Server = req.app.get('io');
 
@@ -183,7 +194,7 @@ router.post(
   validateBody(placeBidSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const { amount } = req.body;
       const io: Server = req.app.get('io');
 
@@ -328,7 +339,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const { seconds } = req.body;
       const io: Server = req.app.get('io');
 
@@ -363,7 +374,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const io: Server = req.app.get('io');
 
       const state = await getGameAuctionState(gameId);
@@ -404,7 +415,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const io: Server = req.app.get('io');
 
       const state = await getGameAuctionState(gameId);
@@ -451,7 +462,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const io: Server = req.app.get('io');
 
       const state = await getGameAuctionState(gameId);
@@ -507,7 +518,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const io: Server = req.app.get('io');
 
       await prisma.game.update({
@@ -530,6 +541,27 @@ router.post(
         },
       });
 
+      // Check for auction-end achievements (like budget_master)
+      const endAchievements = await checkAuctionEndAchievements(gameId);
+
+      // Emit achievement notifications for each participant who earned them
+      for (const [participantId, achievements] of endAchievements) {
+        if (achievements.length > 0) {
+          const participant = await prisma.gameParticipant.findUnique({
+            where: { id: participantId },
+            include: { user: true },
+          });
+          if (participant) {
+            io.to(`game:${gameId}`).emit('achievements:awarded', {
+              participantId,
+              userId: participant.userId,
+              teamName: participant.user.teamName || participant.user.name,
+              achievements,
+            });
+          }
+        }
+      }
+
       const formatted = await formatGameAuctionState(updatedState);
       io.to(`game:${gameId}`).emit('auction:ended', { message: 'Auction has ended!' });
       io.to(`game:${gameId}`).emit('auction:update', formatted);
@@ -547,7 +579,7 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
 
       const state = await getGameAuctionState(gameId);
 
@@ -568,7 +600,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getGameId(req.params);
       const io: Server = req.app.get('io');
 
       const state = await getGameAuctionState(gameId);
@@ -671,6 +703,16 @@ router.post(
         },
       });
 
+      // Check for achievements
+      const bidCount = ((state.currentBiddingLog as unknown[]) || []).length;
+      const awardedAchievements = await checkAuctionAchievements(
+        gameId,
+        participant.id,
+        cricketer.id,
+        state.currentHighBid,
+        bidCount
+      );
+
       io.to(`game:${gameId}`).emit('auction:player_picked', {
         message: winMessage,
         cricketer: {
@@ -684,7 +726,18 @@ router.post(
           userId: participant.userId,
           teamName: participant.user.teamName || participant.user.name,
         },
+        achievements: awardedAchievements,
       });
+
+      // Emit achievement notifications if any were awarded
+      if (awardedAchievements.length > 0) {
+        io.to(`game:${gameId}`).emit('achievements:awarded', {
+          participantId: participant.id,
+          userId: participant.userId,
+          teamName: participant.user.teamName || participant.user.name,
+          achievements: awardedAchievements,
+        });
+      }
 
       const formatted = await formatGameAuctionState(updatedState);
       io.to(`game:${gameId}`).emit('auction:update', formatted);

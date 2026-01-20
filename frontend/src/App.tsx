@@ -4,6 +4,7 @@ import { SocketProvider } from './context/SocketContext';
 import { GameProvider } from './context/GameContext';
 import { ToastProvider } from './context/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import { AchievementNotificationWrapper } from './components/achievements/AchievementNotificationWrapper';
 
 // Auth Pages
 import Login from './pages/Login';
@@ -211,6 +212,7 @@ function App() {
             <GameProvider>
               <ToastProvider>
                 <AppRoutes />
+                <AchievementNotificationWrapper />
               </ToastProvider>
             </GameProvider>
           </SocketProvider>

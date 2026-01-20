@@ -4,7 +4,7 @@ interface Props {
   message: string;
   confirmText?: string;
   cancelText?: string;
-  confirmVariant?: 'danger' | 'primary';
+  confirmVariant?: 'danger' | 'primary' | 'warning' | 'success';
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -21,10 +21,12 @@ export default function ConfirmDialog({
 }: Props) {
   if (!isOpen) return null;
 
-  const confirmButtonClass =
-    confirmVariant === 'danger'
-      ? 'bg-red-600 hover:bg-red-700 text-white'
-      : 'bg-blue-600 hover:bg-blue-700 text-white';
+  const confirmButtonClass = {
+    danger: 'bg-red-600 hover:bg-red-700 text-white',
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+    warning: 'bg-amber-500 hover:bg-amber-600 text-white',
+    success: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+  }[confirmVariant];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

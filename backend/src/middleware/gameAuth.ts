@@ -30,7 +30,8 @@ export const gameAccessMiddleware = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const gameId = req.params.gameId || req.params.id;
+    const gameIdParam = req.params.gameId || req.params.id;
+    const gameId = Array.isArray(gameIdParam) ? gameIdParam[0] : gameIdParam;
     const userId = req.user?.id;
 
     if (!gameId) {

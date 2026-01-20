@@ -5,7 +5,7 @@ import { AuthRequest, auctioneerOnly } from '../middleware/auth.js';
 const router = Router();
 const prisma = new PrismaClient();
 
-const TEAM_SIZE = 11;
+const TEAM_SIZE = 12;
 const MAX_FOREIGNERS = 4;
 
 // Helper to calculate snake order

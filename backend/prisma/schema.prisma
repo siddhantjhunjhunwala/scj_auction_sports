@@ -237,10 +237,11 @@ model GameParticipant {
   joinedAt        DateTime @default(now())
 
   // Relations
-  game       Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user       User            @relation(fields: [userId], references: [id])
-  cricketers GameCricketer[] @relation("PickedByParticipant")
-  bids       GameBid[]
+  game         Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id])
+  cricketers   GameCricketer[] @relation("PickedByParticipant")
+  bids         GameBid[]
+  achievements ParticipantAchievement[]
 
   @@unique([gameId, userId])
   @@map("game_participants")
@@ -400,4 +401,65 @@ model PointSystemConfig {
   game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@map("point_system_configs")
+}
+
+// ========================
+// ACHIEVEMENT SYSTEM
+// ========================
+
+enum AchievementType {
+  // Auction achievements
+  first_pick           // First player picked in auction
+  big_spender          // Spent 50+ on a single player
+  bargain_hunter       // Won a player for base price
+  bidding_war_winner   // Won a player after 10+ bids
+  full_squad           // Completed 12-player squad
+  foreign_legion       // Picked 4 foreign players
+  budget_master        // Finished auction with 20+ budget remaining
+
+  // Scoring achievements
+  century_club         // Own a player who scored 100+ runs
+  hat_trick_hero       // Own a player who took 3+ wickets
+  match_winner         // Own top scorer of a match
+  consistent_performer // Own player in playing XI for 5+ matches
+  points_milestone_500 // Reached 500 total points
+  points_milestone_1000 // Reached 1000 total points
+  weekly_champion      // Highest points in a single match
+
+  // Team achievements
+  balanced_squad       // Have at least 2 of each player type
+  ipl_collector        // Have players from 5+ different IPL teams
+  top_3_finish         // Finished in top 3 of leaderboard
+  league_champion      // Won the league (1st place)
+}
+
+model Achievement {
+  id          String          @id @default(uuid())
+  type        AchievementType @unique
+  name        String
+  description String
+  iconEmoji   String          // Emoji icon for the badge
+  rarity      String          @default("common") // common, rare, epic, legendary
+  points      Int             @default(10) // Bonus points for earning achievement
+
+  // Relations
+  earnedBy ParticipantAchievement[]
+
+  @@map("achievements")
+}
+
+model ParticipantAchievement {
+  id            String   @id @default(uuid())
+  participantId String
+  achievementId String
+  earnedAt      DateTime @default(now())
+  matchId       String?  // Optional: which match triggered this achievement
+  metadata      Json?    // Additional context (e.g., player name, amount)
+
+  // Relations
+  participant GameParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  achievement Achievement     @relation(fields: [achievementId], references: [id])
+
+  @@unique([participantId, achievementId])
+  @@map("participant_achievements")
 }

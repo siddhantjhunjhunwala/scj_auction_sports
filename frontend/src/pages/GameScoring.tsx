@@ -44,6 +44,14 @@ export default function GameScoring() {
     team2: '',
     matchDate: new Date().toISOString().split('T')[0],
   });
+  const [showAutoPopulate, setShowAutoPopulate] = useState(false);
+  const [isAutoPopulating, setIsAutoPopulating] = useState(false);
+  const [autoPopulateData, setAutoPopulateData] = useState('');
+  const [autoPopulateSource, setAutoPopulateSource] = useState<'manual' | 'cricapi'>('manual');
+  const [autoPopulateResult, setAutoPopulateResult] = useState<{
+    matchedPlayers: number;
+    unmatchedPlayers: string[];
+  } | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -183,6 +191,51 @@ export default function GameScoring() {
     }
   };
 
+  const handleAutoPopulate = async () => {
+    if (!gameId || !selectedMatchId || !autoPopulateData.trim()) return;
+
+    try {
+      setIsAutoPopulating(true);
+      setAutoPopulateResult(null);
+
+      const response = await gameScoringApi.autoPopulateScores(
+        gameId,
+        selectedMatchId,
+        autoPopulateSource,
+        autoPopulateData
+      );
+
+      setAutoPopulateResult({
+        matchedPlayers: response.data.matchedPlayers,
+        unmatchedPlayers: response.data.unmatchedPlayers,
+      });
+
+      // Reload scores to show the auto-populated data
+      await loadMatchScores();
+
+      // Refresh matches to show the populated status
+      const matchesRes = await gameScoringApi.getMatches(gameId);
+      setMatches(matchesRes.data);
+
+      toast.success(
+        'Scores auto-populated',
+        `${response.data.matchedPlayers} players matched`
+      );
+
+      if (response.data.unmatchedPlayers.length > 0) {
+        toast.info(
+          'Some players not matched',
+          `${response.data.unmatchedPlayers.length} players couldn't be matched`
+        );
+      }
+    } catch (err) {
+      console.error('Auto-populate failed:', err);
+      toast.error('Failed to auto-populate scores');
+    } finally {
+      setIsAutoPopulating(false);
+    }
+  };
+
   const selectedMatch = matches.find(m => m.id === selectedMatchId);
 
   const getPlayerTypeConfig = (type: string) => {
@@ -246,6 +299,22 @@ export default function GameScoring() {
               </div>
             </div>
             <div className="flex gap-3">
+              {selectedMatchId && (
+                <button
+                  onClick={() => {
+                    setAutoPopulateData('');
+                    setAutoPopulateResult(null);
+                    setShowAutoPopulate(true);
+                  }}
+                  className="btn-ghost flex items-center gap-2 text-[var(--accent-cyan)] hover:bg-[var(--accent-cyan)]/10"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                  </svg>
+                  <span className="hidden sm:inline">Auto-Populate</span>
+                  <span className="sm:hidden">Auto</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowCreateMatch(true)}
                 className="btn-secondary flex items-center gap-2"
@@ -254,7 +323,8 @@ export default function GameScoring() {
                   <line x1="12" y1="5" x2="12" y2="19"/>
                   <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-                New Match
+                <span className="hidden sm:inline">New Match</span>
+                <span className="sm:hidden">New</span>
               </button>
               <LoadingButton
                 onClick={handleSaveScores}
@@ -686,6 +756,176 @@ export default function GameScoring() {
                 </LoadingButton>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Populate Modal */}
+      {showAutoPopulate && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card-glow p-6 w-full max-w-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-purple)] flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-display text-[var(--text-primary)]">Auto-Populate Scores</h2>
+                <p className="text-sm text-[var(--text-tertiary)]">Import scores from ESPN Cricinfo</p>
+              </div>
+            </div>
+
+            {/* Source Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                Data Source
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAutoPopulateSource('manual')}
+                  className={`flex-1 px-4 py-3 rounded-xl border transition-all flex items-center justify-center gap-2 ${
+                    autoPopulateSource === 'manual'
+                      ? 'bg-[var(--accent-cyan)]/20 border-[var(--accent-cyan)] text-[var(--accent-cyan)]'
+                      : 'bg-[var(--bg-tertiary)] border-[var(--glass-border)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+                  }`}
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                  Paste Scorecard
+                </button>
+                <button
+                  onClick={() => setAutoPopulateSource('cricapi')}
+                  className={`flex-1 px-4 py-3 rounded-xl border transition-all flex items-center justify-center gap-2 ${
+                    autoPopulateSource === 'cricapi'
+                      ? 'bg-[var(--accent-cyan)]/20 border-[var(--accent-cyan)] text-[var(--accent-cyan)]'
+                      : 'bg-[var(--bg-tertiary)] border-[var(--glass-border)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+                  }`}
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                  Cricket API
+                </button>
+              </div>
+            </div>
+
+            {/* Input Area */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                {autoPopulateSource === 'manual'
+                  ? 'Paste ESPN Cricinfo Scorecard'
+                  : 'Match ID from Cricket API'}
+              </label>
+              {autoPopulateSource === 'manual' ? (
+                <textarea
+                  value={autoPopulateData}
+                  onChange={e => setAutoPopulateData(e.target.value)}
+                  placeholder={`Paste the batting and bowling scorecard from ESPN Cricinfo here...
+
+Example format:
+BATTING
+Virat Kohli     c Dhoni b Bumrah    82    56    8    2    146.42
+Rohit Sharma    lbw b Jadeja        45    38    5    1    118.42
+
+BOWLING
+Jasprit Bumrah  4    0    28    2    7.00
+Ravindra Jadeja 4    0    35    1    8.75`}
+                  className="w-full h-64 px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-muted)] font-mono text-sm focus:border-[var(--accent-cyan)] focus:ring-2 focus:ring-[var(--accent-cyan)]/20 focus:outline-none transition-all resize-none"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={autoPopulateData}
+                  onChange={e => setAutoPopulateData(e.target.value)}
+                  placeholder="Enter match ID from CricAPI (e.g., abc123-def456)"
+                  className="w-full px-4 py-3 bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-cyan)] focus:ring-2 focus:ring-[var(--accent-cyan)]/20 focus:outline-none transition-all"
+                />
+              )}
+            </div>
+
+            {/* Instructions */}
+            <div className="mb-6 p-4 rounded-xl bg-[var(--bg-tertiary)]/50 border border-[var(--glass-border)]">
+              <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                <svg className="w-4 h-4 text-[var(--accent-gold)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                How to use
+              </h4>
+              {autoPopulateSource === 'manual' ? (
+                <ol className="text-sm text-[var(--text-secondary)] space-y-1 list-decimal list-inside">
+                  <li>Go to ESPN Cricinfo match page</li>
+                  <li>Copy the batting scorecard (both innings)</li>
+                  <li>Copy the bowling scorecard (both innings)</li>
+                  <li>Paste everything here - the system will match players by name</li>
+                </ol>
+              ) : (
+                <ol className="text-sm text-[var(--text-secondary)] space-y-1 list-decimal list-inside">
+                  <li>Get a Cricket API key from cricapi.com</li>
+                  <li>Find the match ID for the IPL match</li>
+                  <li>Enter the match ID above</li>
+                  <li>Scores will be fetched automatically</li>
+                </ol>
+              )}
+            </div>
+
+            {/* Results */}
+            {autoPopulateResult && (
+              <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                  <span className="font-medium text-emerald-400">
+                    {autoPopulateResult.matchedPlayers} players matched
+                  </span>
+                </div>
+                {autoPopulateResult.unmatchedPlayers.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-[var(--text-tertiary)] mb-1">
+                      Players not matched ({autoPopulateResult.unmatchedPlayers.length}):
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {autoPopulateResult.unmatchedPlayers.map((name, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded">
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAutoPopulate(false)}
+                className="btn-ghost flex-1"
+              >
+                {autoPopulateResult ? 'Done' : 'Cancel'}
+              </button>
+              {!autoPopulateResult && (
+                <LoadingButton
+                  onClick={handleAutoPopulate}
+                  isLoading={isAutoPopulating}
+                  loadingText="Importing..."
+                  disabled={!autoPopulateData.trim()}
+                  className="flex-1 !bg-[var(--accent-cyan)] hover:!bg-[var(--accent-cyan)]/90"
+                >
+                  Import Scores
+                </LoadingButton>
+              )}
+            </div>
           </div>
         </div>
       )}

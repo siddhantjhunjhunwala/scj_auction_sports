@@ -10,6 +10,7 @@ import LiveBiddingTable from '../components/auction/LiveBiddingTable';
 import ConfirmDialog from '../components/auction/ConfirmDialog';
 import PlayerWonMessage from '../components/auction/PlayerWonMessage';
 import AuctionStatusBanner from '../components/auction/AuctionStatusBanner';
+import AuctionNavigation from '../components/auction/AuctionNavigation';
 import SearchInput from '../components/ui/SearchInput';
 import { LoadingButton } from '../components/ui/LoadingSpinner';
 import type { Game, GameCricketer, GameAuctionState, GameParticipant, BidLogEntry } from '../types';
@@ -26,6 +27,7 @@ export default function GameAuction() {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showSellConfirm, setShowSellConfirm] = useState(false);
   const [showWinMessage, setShowWinMessage] = useState(false);
   const [winMessage, setWinMessage] = useState('');
   const previousBidRef = useRef<number>(0);
@@ -261,6 +263,17 @@ export default function GameAuction() {
     }
   };
 
+  const handleSellNow = async () => {
+    if (!gameId) return;
+    try {
+      await gameAuctionApi.assign(gameId);
+      setShowSellConfirm(false);
+    } catch (err) {
+      console.error('Failed to sell player:', err);
+      toast.error('Failed to sell player');
+    }
+  };
+
   const getMinBid = () => {
     if (!auctionState) return 0.5;
     if (auctionState.currentHighBid === 0) return 0.5;
@@ -330,6 +343,15 @@ export default function GameAuction() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Navigation */}
+        {gameId && (
+          <AuctionNavigation
+            gameId={gameId}
+            auctionStatus={(auctionState?.auctionStatus as 'not_started' | 'in_progress' | 'paused' | 'completed') || 'not_started'}
+            isCreator={isCreator}
+          />
+        )}
+
         {/* Status Banner */}
         <AuctionStatusBanner
           status={auctionState?.auctionStatus || 'not_started'}
@@ -486,24 +508,43 @@ export default function GameAuction() {
 
                 {/* Auctioneer Controls */}
                 {isCreator && (
-                  <div className="mt-4 sm:mt-6 grid grid-cols-3 gap-2 sm:gap-3">
-                    {auctionState.auctionStatus === 'in_progress' ? (
-                      <button onClick={handlePause} className="btn-secondary text-sm sm:text-base py-2 sm:py-3">
-                        <span className="hidden sm:inline">⏸️ </span>Pause
-                      </button>
-                    ) : auctionState.auctionStatus === 'paused' ? (
-                      <button onClick={handleResume} className="btn-primary text-sm sm:text-base py-2 sm:py-3">
-                        <span className="hidden sm:inline">▶️ </span>Resume
-                      </button>
-                    ) : (
-                      <div />
-                    )}
-                    <button onClick={() => handleAddTime(15)} className="btn-secondary text-sm sm:text-base py-2 sm:py-3">
-                      +15s
+                  <div className="mt-4 sm:mt-6 space-y-3">
+                    {/* Primary action - Sell Now */}
+                    <button
+                      onClick={() => setShowSellConfirm(true)}
+                      disabled={auctionState.auctionStatus === 'paused'}
+                      className="w-full py-3 text-base sm:text-lg font-semibold rounded-xl transition-all
+                        bg-gradient-to-r from-[var(--accent-emerald)] to-[var(--accent-cyan)]
+                        hover:from-[var(--accent-emerald)]/90 hover:to-[var(--accent-cyan)]/90
+                        text-white shadow-lg shadow-[var(--accent-emerald)]/20
+                        disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      🔨 Sell Now
                     </button>
-                    <button onClick={handleSkip} className="btn-ghost text-sm sm:text-base py-2 sm:py-3">
-                      <span className="hidden sm:inline">⏭️ </span>Skip
-                    </button>
+
+                    {/* Secondary controls */}
+                    <div className="grid grid-cols-4 gap-2 sm:gap-3">
+                      {auctionState.auctionStatus === 'in_progress' ? (
+                        <button onClick={handlePause} className="btn-secondary text-sm sm:text-base py-2 sm:py-3">
+                          <span className="hidden sm:inline">⏸️ </span>Pause
+                        </button>
+                      ) : auctionState.auctionStatus === 'paused' ? (
+                        <button onClick={handleResume} className="btn-primary text-sm sm:text-base py-2 sm:py-3">
+                          <span className="hidden sm:inline">▶️ </span>Resume
+                        </button>
+                      ) : (
+                        <div />
+                      )}
+                      <button onClick={() => handleAddTime(15)} className="btn-secondary text-sm sm:text-base py-2 sm:py-3">
+                        +15s
+                      </button>
+                      <button onClick={() => handleAddTime(30)} className="btn-secondary text-sm sm:text-base py-2 sm:py-3">
+                        +30s
+                      </button>
+                      <button onClick={handleSkip} className="btn-ghost text-sm sm:text-base py-2 sm:py-3">
+                        <span className="hidden sm:inline">⏭️ </span>Skip
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -607,7 +648,7 @@ export default function GameAuction() {
                           </p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-xs text-[var(--text-tertiary)]">
-                              {pickedCount}/11 players
+                              {pickedCount}/12 players
                             </span>
                             {isHighBidder && (
                               <span className="badge badge-emerald text-xs">Leading</span>
@@ -622,7 +663,7 @@ export default function GameAuction() {
                       <div className="mt-2 progress-bar">
                         <div
                           className="progress-fill"
-                          style={{ width: `${(pickedCount / 11) * 100}%` }}
+                          style={{ width: `${(pickedCount / 12) * 100}%` }}
                         />
                       </div>
                     </div>
@@ -669,6 +710,21 @@ export default function GameAuction() {
         confirmVariant="danger"
         onConfirm={handleEndAuction}
         onCancel={() => setShowEndConfirm(false)}
+      />
+
+      {/* Sell Now Confirmation */}
+      <ConfirmDialog
+        isOpen={showSellConfirm}
+        title="Sell Player Now?"
+        message={
+          auctionState?.currentHighBid && auctionState.currentHighBid > 0
+            ? `Sell ${auctionState.currentCricketer?.firstName} ${auctionState.currentCricketer?.lastName} to ${auctionState.currentHighBidder?.user?.teamName || auctionState.currentHighBidder?.user?.name} for $${auctionState.currentHighBid.toFixed(2)}?`
+            : `No bids yet. Skip ${auctionState?.currentCricketer?.firstName} ${auctionState?.currentCricketer?.lastName}?`
+        }
+        confirmText={auctionState?.currentHighBid && auctionState.currentHighBid > 0 ? "Sell Now" : "Skip Player"}
+        confirmVariant={auctionState?.currentHighBid && auctionState.currentHighBid > 0 ? "success" : "warning"}
+        onConfirm={handleSellNow}
+        onCancel={() => setShowSellConfirm(false)}
       />
     </div>
   );

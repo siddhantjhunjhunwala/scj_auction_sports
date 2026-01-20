@@ -80,7 +80,7 @@ export default function PlayerSummary({ players, teams, currentUserId }: PlayerS
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
-                    {composition.total}/11 players
+                    {composition.total}/12 players
                   </p>
                 </div>
 

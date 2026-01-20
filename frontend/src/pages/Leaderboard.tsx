@@ -15,9 +15,12 @@ import {
 import { gamesApi, gameScoringApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import type { Game, GameLeaderboard, GameMatch } from '../types';
 import Skeleton, { SkeletonLeaderboard } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import { ScoreUpdateNotification } from '../components/scoring';
+import AuctionNavigation from '../components/auction/AuctionNavigation';
 
 ChartJS.register(
   CategoryScale,
@@ -51,6 +54,16 @@ export default function Leaderboard() {
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   const toast = useToast();
+  const { joinGameRoom } = useSocket();
+
+  const isCreator = game?.createdById === user?.id;
+
+  // Join socket room for real-time updates
+  useEffect(() => {
+    if (gameId) {
+      joinGameRoom(gameId);
+    }
+  }, [gameId, joinGameRoom]);
 
   useEffect(() => {
     if (gameId) {
@@ -285,6 +298,15 @@ export default function Leaderboard() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Navigation */}
+        {gameId && game && (
+          <AuctionNavigation
+            gameId={gameId}
+            gameStatus={game.status as 'pre_auction' | 'auction_active' | 'auction_paused' | 'auction_ended' | 'scoring' | 'completed'}
+            isCreator={isCreator}
+          />
+        )}
+
         {/* Match Toggle */}
         {matches.length > 0 && (
           <div className="glass-card p-4 mb-6 flex flex-wrap items-center gap-4">
@@ -523,6 +545,9 @@ export default function Leaderboard() {
           </div>
         )}
       </main>
+
+      {/* Real-time score update notification */}
+      <ScoreUpdateNotification onRefresh={loadLeaderboard} />
     </div>
   );
 }

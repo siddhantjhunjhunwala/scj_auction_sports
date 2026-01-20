@@ -21,6 +21,13 @@ const router = Router();
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Helper to safely get param from request
+function getParam(params: Record<string, string | string[] | undefined>, key: string): string {
+  const val = params[key];
+  if (Array.isArray(val)) return val[0];
+  return val || '';
+}
+
 // Generate a random 6-character game code
 function generateGameCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -260,7 +267,7 @@ router.post('/join', validateBody(joinGameByCodeSchema), async (req: AuthRequest
 // Join a game by ID
 router.post('/:id/join', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
     const userId = req.user!.id;
 
     const game = await prisma.game.findUnique({
@@ -341,7 +348,7 @@ router.post('/:id/join', async (req: AuthRequest, res: Response): Promise<void> 
 // Get a specific game
 router.get('/:id', gameAccessMiddleware, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
 
     const game = await prisma.game.findUnique({
       where: { id },
@@ -393,7 +400,7 @@ router.get('/:id', gameAccessMiddleware, async (req: GameAuthRequest, res: Respo
 // Update game settings (creator only)
 router.patch('/:id', gameAccessMiddleware, gameCreatorOnly, validateBody(updateGameSchema), async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
     const { name, joiningAllowed } = req.body;
 
     const updateData: { name?: string; joiningAllowed?: boolean } = {};
@@ -435,7 +442,7 @@ router.patch('/:id', gameAccessMiddleware, gameCreatorOnly, validateBody(updateG
 // Delete game (creator only)
 router.delete('/:id', gameAccessMiddleware, gameCreatorOnly, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
 
     await prisma.game.delete({
       where: { id },
@@ -456,7 +463,7 @@ router.post(
   upload.single('file'),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = getParam(req.params, 'id');
 
       if (!req.file) {
         res.status(400).json({ message: 'No file uploaded' });
@@ -533,7 +540,7 @@ router.post(
 // Get cricketers for a game
 router.get('/:id/cricketers', gameAccessMiddleware, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
 
     const cricketers = await prisma.gameCricketer.findMany({
       where: { gameId: id },
@@ -564,7 +571,7 @@ router.get('/:id/cricketers', gameAccessMiddleware, async (req: GameAuthRequest,
 // Get unpicked cricketers for a game
 router.get('/:id/cricketers/unpicked', gameAccessMiddleware, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
 
     const cricketers = await prisma.gameCricketer.findMany({
       where: {
@@ -585,7 +592,7 @@ router.get('/:id/cricketers/unpicked', gameAccessMiddleware, async (req: GameAut
 // Get points config for a game
 router.get('/:id/points-config', gameAccessMiddleware, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
 
     let config = await prisma.pointSystemConfig.findUnique({
       where: { gameId: id },
@@ -612,7 +619,7 @@ router.put(
   validateBody(pointsConfigSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = getParam(req.params, 'id');
       const configData = req.body;
 
       // Remove id and gameId from update data
@@ -636,7 +643,7 @@ router.put(
 // Get participants of a game
 router.get('/:id/participants', gameAccessMiddleware, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
 
     const participants = await prisma.gameParticipant.findMany({
       where: { gameId: id },
@@ -665,7 +672,7 @@ router.get('/:id/participants', gameAccessMiddleware, async (req: GameAuthReques
 // Leave a game (participant only, before auction starts)
 router.post('/:id/leave', gameAccessMiddleware, async (req: GameAuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = getParam(req.params, 'id');
     const userId = req.user!.id;
 
     if (req.isGameCreator) {
@@ -712,7 +719,7 @@ router.post(
   validateBody(auctionOrderSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = getParam(req.params, 'id');
       const { order } = req.body;
 
       // Update each cricketer's auction order

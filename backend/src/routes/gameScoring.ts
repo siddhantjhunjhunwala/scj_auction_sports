@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient, PointSystemConfig } from '@prisma/client';
 import PDFDocument from 'pdfkit';
+import { Server } from 'socket.io';
 import {
   GameAuthRequest,
   gameAccessMiddleware,
@@ -9,9 +10,18 @@ import {
 import { sendTeamsPdf } from '../services/emailService.js';
 import { validateBody } from '../middleware/validate.js';
 import { createMatchSchema, saveMatchScoresSchema } from '../validation/schemas.js';
+import { autoPopulateScores, getAvailableMatches } from '../services/cricketScoreService.js';
+import { checkScoringAchievements } from '../services/achievementService.js';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Helper to safely get param from request
+function getParam(params: Record<string, string | string[] | undefined>, key: string): string {
+  const val = params[key];
+  if (Array.isArray(val)) return val[0];
+  return val || '';
+}
 
 interface ScoreData {
   inPlayingXi?: boolean;
@@ -136,7 +146,7 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
 
       const matches = await prisma.gameMatch.findMany({
         where: { gameId },
@@ -170,7 +180,7 @@ router.post(
   validateBody(createMatchSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
       const { matchNumber, team1, team2, matchDate } = req.body;
 
       // Check if match number already exists for this game
@@ -222,7 +232,7 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { matchId } = req.params;
+      const matchId = getParam(req.params, 'matchId');
 
       const scores = await prisma.gamePlayerMatchScore.findMany({
         where: { gameMatchId: matchId },
@@ -293,7 +303,8 @@ router.post(
   validateBody(saveMatchScoresSchema),
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId, matchId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
+      const matchId = getParam(req.params, 'matchId');
       const { scores } = req.body as {
         scores: Array<
           ScoreData & {
@@ -376,9 +387,112 @@ router.post(
         data: { scoresPopulated: true },
       });
 
+      // Check for scoring achievements
+      const io: Server = req.app.get('io');
+      const awardedAchievements = await checkScoringAchievements(gameId, matchId);
+
+      // Emit achievement notifications for each participant who earned them
+      for (const [participantId, achievements] of awardedAchievements) {
+        if (achievements.length > 0) {
+          const participant = await prisma.gameParticipant.findUnique({
+            where: { id: participantId },
+            include: { user: true },
+          });
+          if (participant) {
+            io.to(`game:${gameId}`).emit('achievements:awarded', {
+              participantId,
+              userId: participant.userId,
+              teamName: participant.user.teamName || participant.user.name,
+              achievements,
+            });
+          }
+        }
+      }
+
+      // Emit real-time scoring update to all participants
+      const match = await prisma.gameMatch.findUnique({
+        where: { id: matchId },
+      });
+
+      io.to(`game:${gameId}`).emit('scores:updated', {
+        matchId,
+        matchNumber: match?.matchNumber,
+        team1: match?.team1,
+        team2: match?.team2,
+        scoresCount: savedScores.length,
+        timestamp: new Date().toISOString(),
+      });
+
       res.json(savedScores);
     } catch (error) {
       console.error('Save game match scores error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
+
+// Auto-populate scores from external source (creator only)
+router.post(
+  '/:gameId/matches/:matchId/auto-populate',
+  gameAccessMiddleware,
+  gameCreatorOnly,
+  async (req: GameAuthRequest, res: Response): Promise<void> => {
+    try {
+      const gameId = getParam(req.params, 'gameId');
+      const matchId = getParam(req.params, 'matchId');
+      const { source, sourceData } = req.body as {
+        source: 'cricapi' | 'manual';
+        sourceData: string;
+      };
+
+      if (!source || !sourceData) {
+        res.status(400).json({
+          message: 'Source and sourceData are required',
+        });
+        return;
+      }
+
+      if (!['cricapi', 'manual'].includes(source)) {
+        res.status(400).json({
+          message: 'Invalid source. Must be "cricapi" or "manual"',
+        });
+        return;
+      }
+
+      const result = await autoPopulateScores(gameId, matchId, source, sourceData);
+
+      if (!result.success) {
+        res.status(400).json({
+          message: result.error || 'Auto-populate failed',
+          unmatchedPlayers: result.unmatchedPlayers,
+        });
+        return;
+      }
+
+      res.json({
+        message: 'Scores auto-populated successfully',
+        matchedPlayers: result.matchedPlayers,
+        unmatchedPlayers: result.unmatchedPlayers,
+        scores: result.scores,
+      });
+    } catch (error) {
+      console.error('Auto-populate scores error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
+
+// Get available IPL matches from cricket API
+router.get(
+  '/:gameId/available-matches',
+  gameAccessMiddleware,
+  gameCreatorOnly,
+  async (_req: GameAuthRequest, res: Response): Promise<void> => {
+    try {
+      const matches = await getAvailableMatches();
+      res.json(matches);
+    } catch (error) {
+      console.error('Get available matches error:', error);
       res.status(500).json({ message: 'Server error' });
     }
   }
@@ -390,7 +504,7 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
       const upToMatch = req.query.upToMatch ? parseInt(req.query.upToMatch as string) : undefined;
 
       // Get all participants with their teams
@@ -485,7 +599,8 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId, participantId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
+      const participantId = getParam(req.params, 'participantId');
       const upToMatch = req.query.upToMatch ? parseInt(req.query.upToMatch as string) : undefined;
 
       const participant = await prisma.gameParticipant.findUnique({
@@ -613,7 +728,7 @@ router.get(
   gameAccessMiddleware,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
 
       const game = await prisma.game.findUnique({
         where: { id: gameId },
@@ -708,7 +823,7 @@ router.post(
   gameCreatorOnly,
   async (req: GameAuthRequest, res: Response): Promise<void> => {
     try {
-      const { gameId } = req.params;
+      const gameId = getParam(req.params, 'gameId');
 
       const game = await prisma.game.findUnique({
         where: { id: gameId },

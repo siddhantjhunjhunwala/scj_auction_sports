@@ -295,6 +295,31 @@ export const gameScoringApi = {
       scores,
     }),
 
+  // Auto-populate scores
+  autoPopulateScores: (
+    gameId: string,
+    matchId: string,
+    source: 'cricapi' | 'manual',
+    sourceData: string
+  ) =>
+    api.post<{
+      message: string;
+      matchedPlayers: number;
+      unmatchedPlayers: string[];
+      scores: Array<{ cricketerId: string; cricketerName: string; points: number }>;
+    }>(`/games/${gameId}/matches/${matchId}/auto-populate`, { source, sourceData }),
+
+  // Get available IPL matches from cricket API
+  getAvailableMatches: (gameId: string) =>
+    api.get<Array<{
+      id: string;
+      name: string;
+      date: string;
+      team1: string;
+      team2: string;
+      status: string;
+    }>>(`/games/${gameId}/available-matches`),
+
   // Leaderboard
   getLeaderboard: (gameId: string, upToMatch?: number) =>
     api.get<GameLeaderboard>(`/games/${gameId}/leaderboard`, {
@@ -316,6 +341,80 @@ export const gameScoringApi = {
     api.post<{ message: string; success: string[]; failed: string[] }>(
       `/games/${gameId}/reports/email`
     ),
+};
+
+// Achievement types
+export interface Achievement {
+  type: string;
+  name: string;
+  description: string;
+  iconEmoji: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  points: number;
+}
+
+export interface EarnedAchievement extends Achievement {
+  earnedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AchievementLeaderboardEntry {
+  participantId: string;
+  userId: string;
+  userName: string;
+  teamName: string | null;
+  achievementCount: number;
+  totalAchievementPoints: number;
+  achievements: Array<{
+    type: string;
+    name: string;
+    iconEmoji: string;
+    rarity: string;
+    earnedAt: string;
+  }>;
+}
+
+export interface RecentAchievement {
+  achievementType: string;
+  achievementName: string;
+  iconEmoji: string;
+  rarity: string;
+  userName: string;
+  teamName: string | null;
+  earnedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+// Achievement APIs
+export const achievementsApi = {
+  // Seed achievements (admin)
+  seed: () => api.post('/achievements/seed'),
+
+  // Get all achievement definitions
+  getDefinitions: () => api.get<Achievement[]>('/achievements/definitions'),
+
+  // Get current user's achievements in a game
+  getMyAchievements: (gameId: string) =>
+    api.get<{
+      earned: EarnedAchievement[];
+      available: Achievement[];
+      totalEarned: number;
+      totalPoints: number;
+    }>(`/achievements/game/${gameId}/my-achievements`),
+
+  // Get achievement leaderboard for a game
+  getLeaderboard: (gameId: string) =>
+    api.get<AchievementLeaderboardEntry[]>(`/achievements/game/${gameId}/leaderboard`),
+
+  // Get achievements for a specific participant
+  getParticipantAchievements: (gameId: string, participantId: string) =>
+    api.get<EarnedAchievement[]>(`/achievements/game/${gameId}/participant/${participantId}`),
+
+  // Get recent achievements in a game (activity feed)
+  getRecent: (gameId: string, limit?: number) =>
+    api.get<RecentAchievement[]>(`/achievements/game/${gameId}/recent`, {
+      params: limit ? { limit } : undefined,
+    }),
 };
 
 export default api;

@@ -6,7 +6,7 @@ import { Server } from 'socket.io';
 const router = Router();
 const prisma = new PrismaClient();
 
-const TEAM_SIZE = 11;
+const TEAM_SIZE = 12;
 const MAX_FOREIGNERS = 4;
 const MIN_BUDGET_PER_PLAYER = 0.5;
 

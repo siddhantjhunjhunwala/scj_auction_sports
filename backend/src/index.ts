@@ -15,6 +15,7 @@ import reportsRoutes from './routes/reports.js';
 import gamesRoutes from './routes/games.js';
 import gameAuctionRoutes from './routes/gameAuction.js';
 import gameScoringRoutes from './routes/gameScoring.js';
+import achievementsRoutes from './routes/achievements.js';
 import { setupAuctionSocket } from './socket/auctionSocket.js';
 import { authMiddleware } from './middleware/auth.js';
 
@@ -54,6 +55,7 @@ app.use('/api/reports', authMiddleware, reportsRoutes);
 app.use('/api/games', authMiddleware, gamesRoutes);
 app.use('/api/games', authMiddleware, gameAuctionRoutes);
 app.use('/api/games', authMiddleware, gameScoringRoutes);
+app.use('/api/achievements', authMiddleware, achievementsRoutes);
 
 // Health check
 app.get('/health', (_, res) => {

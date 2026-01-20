@@ -3,9 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { gamesApi, gameScoringApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import type { Game, GameParticipant, PlayerDashboardData, GameMatch } from '../types';
 import Skeleton, { SkeletonLeaderboard } from '../components/ui/Skeleton';
 import { NoTeamEmpty } from '../components/ui/EmptyState';
+import { AchievementsList } from '../components/achievements';
+import { HistoricalStatsPanel } from '../components/stats';
+import { ScoreUpdateNotification } from '../components/scoring';
+import AuctionNavigation from '../components/auction/AuctionNavigation';
 
 export default function PlayerDashboard() {
   const { gameId } = useParams<{ gameId: string }>();
@@ -16,8 +21,19 @@ export default function PlayerDashboard() {
   const [selectedMatch, setSelectedMatch] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'team' | 'stats' | 'achievements'>('team');
   const { user } = useAuth();
   const toast = useToast();
+  const { joinGameRoom } = useSocket();
+
+  const isCreator = game?.createdById === user?.id;
+
+  // Join socket room for real-time updates
+  useEffect(() => {
+    if (gameId) {
+      joinGameRoom(gameId);
+    }
+  }, [gameId, joinGameRoom]);
 
   useEffect(() => {
     if (gameId && user) {
@@ -184,6 +200,15 @@ export default function PlayerDashboard() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Navigation */}
+        {gameId && game && (
+          <AuctionNavigation
+            gameId={gameId}
+            gameStatus={game.status as 'pre_auction' | 'auction_active' | 'auction_paused' | 'auction_ended' | 'scoring' | 'completed'}
+            isCreator={isCreator}
+          />
+        )}
+
         {/* Match Toggle */}
         {matches.length > 0 && (
           <div className="glass-card p-4 mb-6 flex flex-wrap items-center gap-4">
@@ -292,8 +317,31 @@ export default function PlayerDashboard() {
               </div>
             </div>
 
-            {/* Player Stats Table */}
-            {dashboardData.playerStats.length > 0 ? (
+            {/* Tab Navigation */}
+            <div className="flex gap-2 mb-6">
+              {(['team', 'stats', 'achievements'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`
+                    px-4 py-2.5 rounded-lg font-medium text-sm capitalize transition-all
+                    ${
+                      activeTab === tab
+                        ? 'bg-[var(--accent-cyan)] text-black shadow-lg shadow-[var(--accent-cyan)]/20'
+                        : 'bg-[var(--glass-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                    }
+                  `}
+                >
+                  {tab === 'team' && '👥 '}
+                  {tab === 'stats' && '📊 '}
+                  {tab === 'achievements' && '🏆 '}
+                  {tab === 'team' ? 'My Team' : tab === 'stats' ? 'Historical Stats' : 'Achievements'}
+                </button>
+              ))}
+            </div>
+
+            {/* Team Tab */}
+            {activeTab === 'team' && dashboardData.playerStats.length > 0 && (
               <div className="glass-card overflow-hidden animate-slide-up" style={{ animationDelay: '0.2s' }}>
                 <div className="px-6 py-4 border-b border-[var(--glass-border)] flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -420,12 +468,32 @@ export default function PlayerDashboard() {
                   </table>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* No team message for team tab */}
+            {activeTab === 'team' && dashboardData.playerStats.length === 0 && (
               <NoTeamEmpty />
+            )}
+
+            {/* Stats Tab */}
+            {activeTab === 'stats' && (
+              <div className="glass-card p-6 animate-slide-up">
+                <HistoricalStatsPanel gameId={gameId!} participantId={participant.id} />
+              </div>
+            )}
+
+            {/* Achievements Tab */}
+            {activeTab === 'achievements' && (
+              <div className="glass-card p-6 animate-slide-up">
+                <AchievementsList gameId={gameId!} showAll />
+              </div>
             )}
           </>
         )}
       </main>
+
+      {/* Real-time score update notification */}
+      <ScoreUpdateNotification onRefresh={loadDashboard} />
     </div>
   );
 }

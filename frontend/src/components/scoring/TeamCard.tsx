@@ -47,7 +47,7 @@ export default function TeamCard({
       {cricketers.length > 0 && (
         <div className="border-t border-gray-100 pt-4">
           <p className="text-sm font-medium text-gray-700 mb-2">
-            Team ({cricketers.length}/11)
+            Team ({cricketers.length}/12)
           </p>
           <div className="flex flex-wrap gap-1">
             {cricketers.slice(0, 6).map(c => (

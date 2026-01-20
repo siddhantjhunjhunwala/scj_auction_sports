@@ -1,6 +1,6 @@
 import type { Cricketer, TeamComposition, User } from '../types';
 
-export const TEAM_SIZE = 11;
+export const TEAM_SIZE = 12;
 export const MAX_FOREIGNERS = 4;
 export const MIN_BUDGET_PER_PLAYER = 0.5;
 export const STARTING_BUDGET = 200;
@@ -37,7 +37,7 @@ export function validateBid(
   if (composition.total >= TEAM_SIZE) {
     return {
       valid: false,
-      message: 'Your team is already full (11 players)',
+      message: 'Your team is already full (12 players)',
     };
   }
 
