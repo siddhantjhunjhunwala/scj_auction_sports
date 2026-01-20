@@ -213,7 +213,7 @@ export const gamesApi = {
     return api.post<{ message: string; cricketers: GameCricketer[] }>(
       `/games/${gameId}/cricketers/upload`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      { headers: {} }  // Let axios set Content-Type with boundary automatically
     );
   },
 
