@@ -4,6 +4,13 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 
+// Load env first
+dotenv.config();
+
+console.log('Starting Fantasy IPL Backend...');
+console.log('Node version:', process.version);
+console.log('PORT env:', process.env.PORT);
+
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import cricketersRoutes from './routes/cricketers.js';
@@ -19,7 +26,7 @@ import achievementsRoutes from './routes/achievements.js';
 import { setupAuctionSocket } from './socket/auctionSocket.js';
 import { authMiddleware } from './middleware/auth.js';
 
-dotenv.config();
+console.log('All imports loaded successfully');
 
 const app = express();
 const httpServer = createServer(app);
@@ -76,12 +83,17 @@ app.use('/api/games', authMiddleware, gameAuctionRoutes);
 app.use('/api/games', authMiddleware, gameScoringRoutes);
 app.use('/api/achievements', authMiddleware, achievementsRoutes);
 
-// Health check
+// Health check - must respond immediately without any dependencies
 app.get('/health', (_, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 app.get('/api/health', (_, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Root route
+app.get('/', (_, res) => {
+  res.status(200).json({ message: 'Fantasy IPL API', status: 'running' });
 });
 
 // Setup Socket.io
