@@ -30,6 +30,7 @@ export default function GameAuction() {
   const [showSellConfirm, setShowSellConfirm] = useState(false);
   const [showWinMessage, setShowWinMessage] = useState(false);
   const [winMessage, setWinMessage] = useState('');
+  const [isBidding, setIsBidding] = useState(false);
   const previousBidRef = useRef<number>(0);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -197,8 +198,9 @@ export default function GameAuction() {
   };
 
   const handleBid = async () => {
-    if (!gameId || !bidAmount) return;
+    if (!gameId || !bidAmount || isBidding) return;
     try {
+      setIsBidding(true);
       await gameAuctionApi.bid(gameId, parseFloat(bidAmount));
       setBidAmount('');
     } catch (err: unknown) {
@@ -206,6 +208,8 @@ export default function GameAuction() {
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         'Failed to place bid';
       toast.error('Bid failed', errorMessage);
+    } finally {
+      setIsBidding(false);
     }
   };
 
@@ -450,8 +454,8 @@ export default function GameAuction() {
                   </div>
                 </div>
 
-                {/* Bid Input */}
-                {currentParticipant && auctionState.auctionStatus === 'in_progress' && (
+                {/* Bid Input - Only for participants, NOT for auctioneer */}
+                {currentParticipant && !isCreator && auctionState.auctionStatus === 'in_progress' && (
                   <div className="mt-4 sm:mt-6">
                     <div className="flex gap-2 sm:gap-3">
                       <div className="flex-1 relative">
@@ -472,7 +476,10 @@ export default function GameAuction() {
                       </div>
                       <LoadingButton
                         onClick={handleBid}
+                        isLoading={isBidding}
+                        loadingText="..."
                         disabled={
+                          isBidding ||
                           !bidAmount ||
                           parseFloat(bidAmount) < getMinBid() ||
                           parseFloat(bidAmount) > getMaxBid()
@@ -489,9 +496,11 @@ export default function GameAuction() {
                         <button
                           key={inc}
                           onClick={() => handleQuickBid(inc)}
+                          disabled={isBidding}
                           className="py-2 text-sm sm:text-base bg-[var(--bg-tertiary)] text-[var(--text-secondary)]
                             rounded-lg hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]
-                            border border-[var(--glass-border)] transition-all font-mono"
+                            border border-[var(--glass-border)] transition-all font-mono
+                            disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           +${inc}
                         </button>

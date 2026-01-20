@@ -195,10 +195,11 @@ export const gamesApi = {
   delete: (id: string) => api.delete(`/games/${id}`),
 
   // Join/Leave
-  joinByCode: (code: string) =>
-    api.post<{ game: Game; participant: GameParticipant }>('/games/join', { code }),
+  joinByCode: (code: string, teamName?: string, avatarUrl?: string) =>
+    api.post<{ game: Game; participant: GameParticipant }>('/games/join', { code, teamName, avatarUrl }),
 
-  joinById: (id: string) => api.post<GameParticipant>(`/games/${id}/join`),
+  joinById: (id: string, teamName?: string, avatarUrl?: string) =>
+    api.post<GameParticipant>(`/games/${id}/join`, { teamName, avatarUrl }),
 
   leave: (id: string) => api.post(`/games/${id}/leave`),
 

@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { gamesApi } from '../services/api';
+import { gamesApi, authApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { gameCodeSchema } from '../validation/schemas';
 import type { Game } from '../types';
 import Skeleton from '../components/ui/Skeleton';
 import { LoadingButton } from '../components/ui/LoadingSpinner';
 import EmptyState from '../components/ui/EmptyState';
+import JoinGameModal from '../components/game/JoinGameModal';
 
 export default function JoinGame() {
   const [joinableGames, setJoinableGames] = useState<Game[]>([]);
@@ -15,8 +17,11 @@ export default function JoinGame() {
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [joiningGameId, setJoiningGameId] = useState<string | null>(null);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [pendingJoin, setPendingJoin] = useState<{ type: 'code' | 'id'; value: string; gameName: string } | null>(null);
   const navigate = useNavigate();
   const toast = useToast();
+  const { updateUser } = useAuth();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -78,39 +83,57 @@ export default function JoinGame() {
     return true;
   };
 
-  const handleJoinByCode = async (e: React.FormEvent) => {
+  const handleJoinByCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateCode(gameCode)) return;
 
-    try {
-      setIsJoining(true);
-      const response = await gamesApi.joinByCode(gameCode);
-      toast.success('Joined game!', `Welcome to ${response.data.game.name}`);
-      navigate(`/game/${response.data.game.id}/lobby`);
-    } catch (err: unknown) {
-      const errorMessage =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Failed to join game. Check the code and try again.';
-      toast.error('Failed to join', errorMessage);
-    } finally {
-      setIsJoining(false);
-    }
+    // Show modal to get team name and avatar
+    setPendingJoin({ type: 'code', value: gameCode, gameName: 'the game' });
+    setShowJoinModal(true);
   };
 
-  const handleJoinById = async (gameId: string, gameName: string) => {
+  const handleJoinByIdClick = (gameId: string, gameName: string) => {
+    // Show modal to get team name and avatar
+    setPendingJoin({ type: 'id', value: gameId, gameName });
+    setShowJoinModal(true);
+  };
+
+  const handleJoinWithProfile = async (teamName: string, avatarUrl: string) => {
+    if (!pendingJoin) return;
+
     try {
-      setJoiningGameId(gameId);
-      await gamesApi.joinById(gameId);
-      toast.success('Joined game!', `Welcome to ${gameName}`);
-      navigate(`/game/${gameId}/lobby`);
+      // Update user profile with team name and avatar
+      const profileResponse = await authApi.updateProfile({ teamName, avatarUrl });
+      updateUser(profileResponse.data);
+
+      if (pendingJoin.type === 'code') {
+        setIsJoining(true);
+        const response = await gamesApi.joinByCode(pendingJoin.value, teamName, avatarUrl);
+        toast.success('Joined game!', `Welcome to ${response.data.game.name}`);
+        setShowJoinModal(false);
+        navigate(`/game/${response.data.game.id}/lobby`);
+      } else {
+        setJoiningGameId(pendingJoin.value);
+        await gamesApi.joinById(pendingJoin.value, teamName, avatarUrl);
+        toast.success('Joined game!', `Welcome to ${pendingJoin.gameName}`);
+        setShowJoinModal(false);
+        navigate(`/game/${pendingJoin.value}/lobby`);
+      }
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         'Failed to join game';
       toast.error('Failed to join', errorMessage);
+      throw err; // Re-throw to let modal handle it
     } finally {
+      setIsJoining(false);
       setJoiningGameId(null);
     }
+  };
+
+  const handleCancelJoin = () => {
+    setShowJoinModal(false);
+    setPendingJoin(null);
   };
 
   return (
@@ -152,7 +175,7 @@ export default function JoinGame() {
               </div>
             </div>
 
-            <form onSubmit={handleJoinByCode}>
+            <form onSubmit={handleJoinByCodeSubmit}>
               <div className="flex justify-center gap-2 sm:gap-3 mb-2">
                 {[0, 1, 2, 3, 4, 5].map(i => (
                   <input
@@ -270,7 +293,7 @@ export default function JoinGame() {
                     </div>
                   </div>
                   <LoadingButton
-                    onClick={() => handleJoinById(game.id, game.name)}
+                    onClick={() => handleJoinByIdClick(game.id, game.name)}
                     isLoading={joiningGameId === game.id}
                     loadingText="..."
                     variant="secondary"
@@ -284,6 +307,14 @@ export default function JoinGame() {
           )}
         </div>
       </main>
+
+      {/* Join Game Modal */}
+      <JoinGameModal
+        isOpen={showJoinModal}
+        gameName={pendingJoin?.gameName || ''}
+        onJoin={handleJoinWithProfile}
+        onCancel={handleCancelJoin}
+      />
     </div>
   );
 }
