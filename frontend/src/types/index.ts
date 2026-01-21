@@ -178,6 +178,9 @@ export interface Game {
   joiningAllowed: boolean;
   cricketersUploaded: boolean;
   createdAt: string;
+  logoUrl?: string | null;
+  iplSeasonYear?: number;
+  rulebookUrl?: string | null;
   creator?: {
     id: string;
     name: string;

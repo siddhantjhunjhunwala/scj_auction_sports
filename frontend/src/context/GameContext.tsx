@@ -11,6 +11,7 @@ interface GameContextType {
   isLoading: boolean;
   error: string | null;
   setCurrentGame: (game: Game | null) => void;
+  loadGame: (gameId: string) => Promise<void>;
   joinGame: (gameId: string) => Promise<void>;
   joinGameByCode: (code: string) => Promise<void>;
   leaveGame: () => Promise<void>;
@@ -25,6 +26,7 @@ const GameContext = createContext<GameContextType>({
   isLoading: false,
   error: null,
   setCurrentGame: () => {},
+  loadGame: async () => {},
   joinGame: async () => {},
   joinGameByCode: async () => {},
   leaveGame: async () => {},
@@ -55,6 +57,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       leaveGameRoom();
     }
   }, [user, joinGameRoom, leaveGameRoom]);
+
+  const loadGame = useCallback(async (gameId: string) => {
+    // Don't reload if same game is already loaded
+    if (currentGame?.id === gameId) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await gamesApi.getById(gameId);
+      setCurrentGameState(response.data);
+      const userParticipant = response.data.participants?.find(p => p.userId === user?.id);
+      setParticipant(userParticipant || null);
+      joinGameRoom(gameId);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load game';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentGame, user, joinGameRoom]);
 
   const refreshGame = useCallback(async () => {
     if (!currentGame) return;
@@ -148,6 +171,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         error,
         setCurrentGame,
+        loadGame,
         joinGame,
         joinGameByCode,
         leaveGame,

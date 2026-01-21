@@ -18,28 +18,42 @@ import Subs from './pages/Subs';
 import Reports from './pages/Reports';
 
 // New Multi-Game Pages
-import AuctioneerDashboard from './pages/AuctioneerDashboard';
-import JoinGame from './pages/JoinGame';
+import HomePage from './pages/HomePage';
 import GameLobby from './pages/GameLobby';
-import PointsConfig from './pages/PointsConfig';
 import GameAuction from './pages/GameAuction';
 import PlayerDashboard from './pages/PlayerDashboard';
-import Leaderboard from './pages/Leaderboard';
 import GameScoring from './pages/GameScoring';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+// V2 Pages
+import SetupPage from './pages/v2/SetupPage';
+import PointsPage from './pages/v2/PointsPage';
+import ListPage from './pages/v2/ListPage';
+import LivePage from './pages/v2/LivePage';
+import ResultsPage from './pages/v2/ResultsPage';
+import DashPage from './pages/v2/DashPage';
+import LeaderboardPage from './pages/v2/LeaderboardPage';
+import SubsPage from './pages/v2/SubsPage';
+
+// Layout
+import AppLayout from './components/layout/AppLayout';
+
+function ProtectedRoute({ children, useLayout = true }: { children: React.ReactNode; useLayout?: boolean }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-deep)]">
+        <div className="spinner"></div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (useLayout) {
+    return <AppLayout>{children}</AppLayout>;
   }
 
   return <>{children}</>;
@@ -50,14 +64,14 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-deep)]">
+        <div className="spinner"></div>
       </div>
     );
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   return <>{children}</>;
@@ -84,40 +98,26 @@ function AppRoutes() {
         }
       />
 
-      {/* Main Dashboard */}
+      {/* Home - My Games */}
       <Route
-        path="/dashboard"
+        path="/home"
         element={
           <ProtectedRoute>
-            <AuctioneerDashboard />
+            <HomePage />
           </ProtectedRoute>
         }
       />
 
-      {/* Join Game */}
-      <Route
-        path="/join"
-        element={
-          <ProtectedRoute>
-            <JoinGame />
-          </ProtectedRoute>
-        }
-      />
+      {/* Legacy redirect from /dashboard */}
+      <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+      <Route path="/join" element={<Navigate to="/home" replace />} />
 
-      {/* Game-Specific Routes */}
+      {/* Legacy Game-Specific Routes (lobby, auction, scoring use old UI) */}
       <Route
         path="/game/:gameId/lobby"
         element={
           <ProtectedRoute>
             <GameLobby />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/game/:gameId/points"
-        element={
-          <ProtectedRoute>
-            <PointsConfig />
           </ProtectedRoute>
         }
       />
@@ -138,18 +138,76 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/game/:gameId/leaderboard"
-        element={
-          <ProtectedRoute>
-            <Leaderboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/game/:gameId/scoring"
         element={
           <ProtectedRoute>
             <GameScoring />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* V2 Game Routes - New UI */}
+      <Route
+        path="/game/:gameId/setup"
+        element={
+          <ProtectedRoute>
+            <SetupPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/points"
+        element={
+          <ProtectedRoute>
+            <PointsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/list"
+        element={
+          <ProtectedRoute>
+            <ListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/live"
+        element={
+          <ProtectedRoute>
+            <LivePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/results"
+        element={
+          <ProtectedRoute>
+            <ResultsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/dash"
+        element={
+          <ProtectedRoute>
+            <DashPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/leaderboard"
+        element={
+          <ProtectedRoute>
+            <LeaderboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/:gameId/subs"
+        element={
+          <ProtectedRoute>
+            <SubsPage />
           </ProtectedRoute>
         }
       />
@@ -197,8 +255,8 @@ function AppRoutes() {
       />
 
       {/* Default redirects */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/home" replace />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }

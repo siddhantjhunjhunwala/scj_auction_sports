@@ -189,8 +189,38 @@ export const gamesApi = {
 
   getById: (id: string) => api.get<Game>(`/games/${id}`),
 
-  update: (id: string, data: { name?: string; joiningAllowed?: boolean }) =>
+  update: (id: string, data: {
+    name?: string;
+    joiningAllowed?: boolean;
+    logoUrl?: string;
+    iplSeasonYear?: number;
+  }) =>
     api.patch<Game>(`/games/${id}`, data),
+
+  uploadRulebook: async (gameId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = localStorage.getItem('token');
+
+    const response = await fetch(`${API_BASE_URL}/games/${gameId}/rulebook`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+      throw new Error(error.message || 'Upload failed');
+    }
+
+    const data = await response.json();
+    return { data };
+  },
+
+  startAuction: (gameId: string) =>
+    api.post<Game>(`/games/${gameId}/start-auction`),
 
   delete: (id: string) => api.delete(`/games/${id}`),
 
