@@ -4,7 +4,9 @@ import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
 import { gamesApi, gameAuctionApi } from '../../services/api';
 import GamePageWrapper from '../../components/layout/GamePageWrapper';
-import type { GameCricketer, GameAuctionState, BidLogEntry, PlayerType } from '../../types';
+import type { GameCricketer, GameAuctionState, BidLogEntry, PlayerType, GameParticipant } from '../../types';
+
+const TOTAL_BUDGET = 200;
 
 function LivePageContent() {
   const { currentGame, participant, isCreator, refreshGame } = useGame();
@@ -14,6 +16,8 @@ function LivePageContent() {
   const [auctionState, setAuctionState] = useState<GameAuctionState | null>(null);
   const [unpickedCricketers, setUnpickedCricketers] = useState<GameCricketer[]>([]);
   const [myTeam, setMyTeam] = useState<GameCricketer[]>([]);
+  const [allPickedCricketers, setAllPickedCricketers] = useState<GameCricketer[]>([]);
+  const [participants, setParticipants] = useState<GameParticipant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [bidAmount, setBidAmount] = useState<number>(0);
   const [isBidding, setIsBidding] = useState(false);
@@ -25,16 +29,26 @@ function LivePageContent() {
   const loadAuctionData = useCallback(async () => {
     if (!currentGame) return;
     try {
-      const [stateRes, cricketerRes] = await Promise.all([
+      const [stateRes, cricketerRes, gameRes] = await Promise.all([
         gameAuctionApi.getState(currentGame.id),
         gamesApi.getCricketers(currentGame.id),
+        gamesApi.getById(currentGame.id),
       ]);
       setAuctionState(stateRes.data);
 
       const allCricketers = cricketerRes.data;
       setUnpickedCricketers(allCricketers.filter((c) => !c.isPicked));
 
-      // Get my team
+      // Get all picked cricketers (sorted by most recent first)
+      const pickedCricketers = allCricketers
+        .filter((c) => c.isPicked)
+        .sort((a, b) => (b.pickOrder || 0) - (a.pickOrder || 0));
+      setAllPickedCricketers(pickedCricketers);
+
+      // Store participants for looking up winner names
+      setParticipants(gameRes.data.participants || []);
+
+      // Get my team (for players)
       const myPicks = allCricketers.filter(
         (c) => c.isPicked && c.pickedByParticipantId === participant?.id
       );
@@ -215,6 +229,13 @@ function LivePageContent() {
     const playerSlug = `${cricketer.firstName}-${cricketer.lastName}`.toLowerCase().replace(/\s+/g, '-');
     const iplUrl = `https://www.iplt20.com/players/${playerSlug}`;
     window.open(iplUrl, '_blank');
+  };
+
+  // Get participant name by ID
+  const getParticipantName = (participantId: string | null): string => {
+    if (!participantId) return 'Unknown';
+    const p = participants.find(p => p.id === participantId);
+    return p?.user?.teamName || p?.user?.name || 'Unknown';
   };
 
   // Get high bidder name from auction state
@@ -407,7 +428,7 @@ function LivePageContent() {
                     {isBidding ? '...' : `Bid $${bidAmount.toFixed(1)}M`}
                   </button>
                   <div className="text-center text-[10px] text-[var(--text-tertiary)] mt-1">
-                    Budget: ${(participant?.budgetRemaining || 0).toFixed(1)}M
+                    Budget: ${(TOTAL_BUDGET - myTeam.reduce((sum, p) => sum + (p.pricePaid || 0), 0)).toFixed(1)}M
                   </div>
                 </div>
               )}
@@ -501,70 +522,112 @@ function LivePageContent() {
           </div>
         </div>
 
-        {/* Q4: My Team */}
+        {/* Q4: Picks/My Team */}
         <div className="glass-card p-3 flex flex-col overflow-hidden min-h-0">
           <div className="flex items-center justify-between mb-2 flex-shrink-0">
             <h3 className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-              {isCreator ? 'Teams' : 'My Team'}
+              {isCreator ? 'Recent Picks' : 'My Team'}
             </h3>
             <span className="text-xs text-[var(--text-secondary)]">
-              {myTeam.length} players
+              {isCreator ? allPickedCricketers.length : myTeam.length} players
             </span>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-            {myTeam.length > 0 ? (
-              <div className="space-y-1">
-                {myTeam.map((player) => (
-                  <div
-                    key={player.id}
-                    onClick={() => openIplProfile(player)}
-                    className="flex items-center gap-2 p-1.5 bg-[var(--bg-tertiary)] rounded cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors"
-                  >
-                    <div className="w-6 h-6 rounded bg-[var(--bg-elevated)] flex items-center justify-center text-xs overflow-hidden flex-shrink-0">
-                      {player.pictureUrl ? (
-                        <img src={player.pictureUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        '🏏'
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-[var(--text-primary)] truncate">
-                        {player.firstName} {player.lastName}
+            {isCreator ? (
+              // Auctioneer view: show all recently picked cricketers with winner
+              allPickedCricketers.length > 0 ? (
+                <div className="space-y-1">
+                  {allPickedCricketers.map((player) => (
+                    <div
+                      key={player.id}
+                      className="flex items-center gap-2 p-1.5 bg-[var(--bg-tertiary)] rounded"
+                    >
+                      <div className="w-6 h-6 rounded bg-[var(--bg-elevated)] flex items-center justify-center text-xs overflow-hidden flex-shrink-0">
+                        {player.pictureUrl ? (
+                          <img src={player.pictureUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          '🏏'
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-[var(--text-primary)] truncate">
+                          {player.firstName} {player.lastName}
+                        </div>
+                        <div className="text-[10px] text-[var(--accent-cyan)]">
+                          → {getParticipantName(player.pickedByParticipantId)}
+                        </div>
+                      </div>
+                      <div className="text-xs font-bold text-[var(--accent-gold)]">
+                        ${player.pricePaid?.toFixed(1)}
                       </div>
                     </div>
-                    <div className="text-xs font-bold text-[var(--accent-gold)]">
-                      ${player.pricePaid?.toFixed(1)}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
+                  No picks yet
+                </div>
+              )
             ) : (
-              <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
-                No players yet
-              </div>
+              // Player view: show their team
+              myTeam.length > 0 ? (
+                <div className="space-y-1">
+                  {myTeam.map((player) => (
+                    <div
+                      key={player.id}
+                      onClick={() => openIplProfile(player)}
+                      className="flex items-center gap-2 p-1.5 bg-[var(--bg-tertiary)] rounded cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors"
+                    >
+                      <div className="w-6 h-6 rounded bg-[var(--bg-elevated)] flex items-center justify-center text-xs overflow-hidden flex-shrink-0">
+                        {player.pictureUrl ? (
+                          <img src={player.pictureUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          '🏏'
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-[var(--text-primary)] truncate">
+                          {player.firstName} {player.lastName}
+                        </div>
+                      </div>
+                      <div className="text-xs font-bold text-[var(--accent-gold)]">
+                        ${player.pricePaid?.toFixed(1)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
+                  No players yet
+                </div>
+              )
             )}
           </div>
 
-          {/* Team Stats - Compact */}
-          {!isCreator && myTeam.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-[var(--glass-border)] flex-shrink-0">
-              <div className="flex justify-between text-xs">
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Spent: </span>
-                  <span className="font-bold text-[var(--text-primary)]">
-                    ${myTeam.reduce((sum, p) => sum + (p.pricePaid || 0), 0).toFixed(1)}M
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Left: </span>
-                  <span className="font-bold text-[var(--accent-emerald)]">
-                    ${(participant?.budgetRemaining || 0).toFixed(1)}M
-                  </span>
+          {/* Team Stats - Players Only (with corrected budget calculation) */}
+          {!isCreator && myTeam.length > 0 && (() => {
+            const totalSpent = myTeam.reduce((sum, p) => sum + (p.pricePaid || 0), 0);
+            const budgetRemaining = TOTAL_BUDGET - totalSpent;
+            return (
+              <div className="mt-2 pt-2 border-t border-[var(--glass-border)] flex-shrink-0">
+                <div className="flex justify-between text-xs">
+                  <div>
+                    <span className="text-[var(--text-tertiary)]">Spent: </span>
+                    <span className="font-bold text-[var(--text-primary)]">
+                      ${totalSpent.toFixed(1)}M
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--text-tertiary)]">Left: </span>
+                    <span className="font-bold text-[var(--accent-emerald)]">
+                      ${budgetRemaining.toFixed(1)}M
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>
