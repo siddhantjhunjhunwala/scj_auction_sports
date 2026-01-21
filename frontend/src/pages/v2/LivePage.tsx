@@ -330,39 +330,39 @@ function LivePageContent() {
         </div>
 
         {/* Q2: Bid Controls & Timer */}
-        <div className="glass-card p-5 flex flex-col overflow-hidden min-h-0 relative">
-          <h3 className="text-sm font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-4">
+        <div className="glass-card p-4 flex flex-col overflow-y-auto min-h-0 relative custom-scrollbar">
+          <h3 className="text-sm font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-3 flex-shrink-0">
             Bidding
           </h3>
 
           {currentCricketer ? (
-            <div className="flex-1 flex flex-col">
-              {/* Timer */}
-              <div className="text-center mb-6">
-                <div className={`text-6xl font-display font-bold ${
-                  timeRemaining !== null && timeRemaining <= 5 ? 'text-[var(--accent-red)]' : 'text-[var(--accent-gold)]'
-                }`}>
-                  {timeRemaining !== null ? timeRemaining : '--'}
-                </div>
-                <div className="text-sm text-[var(--text-tertiary)] mt-1">seconds remaining</div>
-              </div>
-
-              {/* Current High Bid */}
-              <div className="text-center mb-6">
-                <div className="text-sm text-[var(--text-tertiary)]">Current Bid</div>
-                <div className="text-3xl font-bold text-[var(--text-primary)]">
-                  ${(auctionState?.currentHighBid || 0).toFixed(1)}M
-                </div>
-                {auctionState?.currentHighBidder?.user && (
-                  <div className={`text-sm mt-1 ${isHighBidder ? 'text-[var(--accent-emerald)]' : 'text-[var(--text-secondary)]'}`}>
-                    {isHighBidder ? 'You are winning!' : `by ${auctionState.currentHighBidder.user.teamName || auctionState.currentHighBidder.user.name}`}
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Timer & Current Bid - Compact Row */}
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                <div className="text-center">
+                  <div className={`text-4xl font-display font-bold ${
+                    timeRemaining !== null && timeRemaining <= 5 ? 'text-[var(--accent-red)]' : 'text-[var(--accent-gold)]'
+                  }`}>
+                    {timeRemaining !== null ? timeRemaining : '--'}
                   </div>
-                )}
+                  <div className="text-xs text-[var(--text-tertiary)]">seconds</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-[var(--text-tertiary)]">Current Bid</div>
+                  <div className="text-2xl font-bold text-[var(--text-primary)]">
+                    ${(auctionState?.currentHighBid || 0).toFixed(1)}M
+                  </div>
+                  {auctionState?.currentHighBidder?.user && (
+                    <div className={`text-xs ${isHighBidder ? 'text-[var(--accent-emerald)]' : 'text-[var(--text-secondary)]'}`}>
+                      {isHighBidder ? 'You are winning!' : `by ${auctionState.currentHighBidder.user.teamName || auctionState.currentHighBidder.user.name}`}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Bid Input - Players Only */}
               {!isCreator && (
-                <div className="mb-4">
+                <div className="flex-shrink-0">
                   <div className="flex gap-2 mb-2">
                     <input
                       type="number"
@@ -370,15 +370,15 @@ function LivePageContent() {
                       onChange={(e) => setBidAmount(parseFloat(e.target.value) || 0)}
                       step={0.5}
                       min={(auctionState?.currentHighBid || 0) + 0.5}
-                      className="flex-1 px-4 py-3 text-center text-xl bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="flex-1 px-3 py-2 text-center text-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5 mb-3">
                     {[0.5, 1, 2, 5].map((increment) => (
                       <button
                         key={increment}
                         onClick={() => setBidAmount((prev) => prev + increment)}
-                        className="flex-1 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
+                        className="flex-1 py-1.5 text-xs bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
                       >
                         +{increment}M
                       </button>
@@ -387,11 +387,11 @@ function LivePageContent() {
                   <button
                     onClick={handleBid}
                     disabled={!canBid || isBidding}
-                    className="w-full mt-4 py-4 text-lg font-bold btn-primary disabled:opacity-50"
+                    className="w-full py-3 text-base font-bold btn-primary disabled:opacity-50"
                   >
                     {isBidding ? 'Bidding...' : `Bid $${bidAmount.toFixed(1)}M`}
                   </button>
-                  <div className="text-center text-xs text-[var(--text-tertiary)] mt-2">
+                  <div className="text-center text-xs text-[var(--text-tertiary)] mt-1.5">
                     Budget: ${(participant?.budgetRemaining || 0).toFixed(1)}M
                   </div>
                 </div>

@@ -293,11 +293,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 {section.items.map((item) => {
                   const isActive = isActivePath(item.path);
                   const isDisabled = isItemDisabled(item);
+                  const itemKey = `${section.header}-${item.label}`;
 
                   if (isDisabled) {
                     return (
                       <div
-                        key={item.path}
+                        key={itemKey}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-muted)] cursor-not-allowed opacity-40"
                         title={item.requiresGame ? 'Join or create a game first' : 'Available after auction ends'}
                       >
@@ -309,7 +310,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
                   return (
                     <Link
-                      key={item.path}
+                      key={itemKey}
                       to={item.path}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                         isActive
