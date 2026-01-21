@@ -5,7 +5,8 @@ import { useGame } from '../../context/GameContext';
 import { useToast } from '../../context/ToastContext';
 import { gamesApi, gameScoringApi, subsApi } from '../../services/api';
 import GamePageWrapper from '../../components/layout/GamePageWrapper';
-import type { GameCricketer, GameParticipant, PlayerType, GameLeaderboard } from '../../types';
+import { getTypeSymbol, getTypeColor, FOREIGN_SYMBOL } from '../../utils/playerSymbols';
+import type { GameCricketer, GameParticipant, GameLeaderboard } from '../../types';
 
 interface SnakeOrderEntry {
   position: number;
@@ -76,26 +77,6 @@ function SubsPageContent() {
   // Current picker
   const currentPickerIndex = snakeOrder.findIndex((e) => !e.hasPicked);
   const isMyTurn = snakeOrder[currentPickerIndex]?.participant.id === participant?.id;
-
-  const getTypeLabel = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'BAT';
-      case 'bowler': return 'BOWL';
-      case 'allrounder': return 'AR';
-      case 'wicketkeeper': return 'WK';
-      default: return String(type).toUpperCase();
-    }
-  };
-
-  const getTypeColor = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'bg-[var(--accent-gold)]/20 text-[var(--accent-gold)]';
-      case 'bowler': return 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)]';
-      case 'allrounder': return 'bg-[var(--accent-purple)]/20 text-[var(--accent-purple)]';
-      case 'wicketkeeper': return 'bg-[var(--accent-emerald)]/20 text-[var(--accent-emerald)]';
-      default: return 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]';
-    }
-  };
 
   const openIplProfile = (cricketer: GameCricketer) => {
     // Use the players URL format: /players/{firstname}-{lastname}
@@ -279,9 +260,10 @@ function SubsPageContent() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                       {cricketer.firstName} {cricketer.lastName}
+                      {cricketer.isForeign && <span className="ml-1">{FOREIGN_SYMBOL}</span>}
                     </div>
-                    <div className={`text-xs ${getTypeColor(cricketer.playerType).split(' ')[1]}`}>
-                      {getTypeLabel(cricketer.playerType)}
+                    <div className={`text-sm ${getTypeColor(cricketer.playerType)}`}>
+                      {getTypeSymbol(cricketer.playerType)}
                     </div>
                   </div>
                 </button>
@@ -361,14 +343,12 @@ function SubsPageContent() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {cricketer.firstName} {cricketer.lastName}
+                    {cricketer.isForeign && <span className="ml-1">{FOREIGN_SYMBOL}</span>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${getTypeColor(cricketer.playerType)}`}>
-                      {getTypeLabel(cricketer.playerType)}
+                    <span className={`text-sm ${getTypeColor(cricketer.playerType)}`}>
+                      {getTypeSymbol(cricketer.playerType)}
                     </span>
-                    {cricketer.isForeign && (
-                      <span className="text-xs text-[var(--accent-rose)]">OS</span>
-                    )}
                     <span className="text-xs text-[var(--text-tertiary)]">{cricketer.iplTeam}</span>
                   </div>
                 </div>

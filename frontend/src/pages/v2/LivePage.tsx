@@ -4,7 +4,8 @@ import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
 import { gamesApi, gameAuctionApi } from '../../services/api';
 import GamePageWrapper from '../../components/layout/GamePageWrapper';
-import type { GameCricketer, GameAuctionState, BidLogEntry, PlayerType, GameParticipant } from '../../types';
+import { getTypeSymbol, FOREIGN_SYMBOL } from '../../utils/playerSymbols';
+import type { GameCricketer, GameAuctionState, BidLogEntry, GameParticipant } from '../../types';
 
 const TOTAL_BUDGET = 200;
 
@@ -196,26 +197,6 @@ function LivePageContent() {
     }
   };
 
-  const getTypeLabel = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'BAT';
-      case 'bowler': return 'BOWL';
-      case 'allrounder': return 'AR';
-      case 'wicketkeeper': return 'WK';
-      default: return String(type).toUpperCase();
-    }
-  };
-
-  const getTypeColor = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'text-[var(--accent-gold)]';
-      case 'bowler': return 'text-[var(--accent-cyan)]';
-      case 'allrounder': return 'text-[var(--accent-purple)]';
-      case 'wicketkeeper': return 'text-[var(--accent-emerald)]';
-      default: return 'text-[var(--text-secondary)]';
-    }
-  };
-
   const getParticipantName = (participantId: string | null): string => {
     if (!participantId) return 'Unknown';
     const p = participants.find(p => p.id === participantId);
@@ -279,9 +260,9 @@ function LivePageContent() {
                     {currentCricketer.firstName} {currentCricketer.lastName}
                   </div>
                   <div className="flex items-center gap-1 text-[10px]">
-                    <span className={getTypeColor(currentCricketer.playerType)}>{getTypeLabel(currentCricketer.playerType)}</span>
-                    <span className="text-[var(--text-tertiary)]">• {currentCricketer.iplTeam}</span>
-                    {currentCricketer.isForeign && <span className="text-[var(--accent-purple)]">OS</span>}
+                    <span>{getTypeSymbol(currentCricketer.playerType)}</span>
+                    <span className="text-[var(--text-tertiary)]">{currentCricketer.iplTeam}</span>
+                    {currentCricketer.isForeign && <span>{FOREIGN_SYMBOL}</span>}
                   </div>
                 </div>
               </div>
@@ -313,7 +294,7 @@ function LivePageContent() {
                         onClick={() => handleStartCricketer(c.id)}
                         className="w-full p-1 text-left text-[10px] bg-[var(--bg-tertiary)] rounded hover:bg-[var(--bg-elevated)]"
                       >
-                        {c.firstName} {c.lastName} <span className={getTypeColor(c.playerType)}>{getTypeLabel(c.playerType)}</span>
+                        {c.firstName} {c.lastName} {getTypeSymbol(c.playerType)} {c.isForeign && FOREIGN_SYMBOL}
                       </button>
                     ))}
                   </div>

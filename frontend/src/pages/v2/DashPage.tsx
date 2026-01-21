@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { gameScoringApi, gamesApi } from '../../services/api';
 import GamePageWrapper from '../../components/layout/GamePageWrapper';
-import type { PlayerDashboardData, GameCricketer, GameMatch, PlayerType } from '../../types';
+import { getTypeSymbol, getTypeColor, FOREIGN_SYMBOL } from '../../utils/playerSymbols';
+import type { PlayerDashboardData, GameCricketer, GameMatch } from '../../types';
 
 function DashPageContent() {
   const { currentGame, participant } = useGame();
@@ -42,26 +43,6 @@ function DashPageContent() {
     };
     loadData();
   }, [currentGame, participant, selectedMatch]);
-
-  const getTypeLabel = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'BAT';
-      case 'bowler': return 'BOWL';
-      case 'allrounder': return 'AR';
-      case 'wicketkeeper': return 'WK';
-      default: return String(type).toUpperCase();
-    }
-  };
-
-  const getTypeColor = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'text-[var(--accent-gold)]';
-      case 'bowler': return 'text-[var(--accent-cyan)]';
-      case 'allrounder': return 'text-[var(--accent-purple)]';
-      case 'wicketkeeper': return 'text-[var(--accent-emerald)]';
-      default: return 'text-[var(--text-secondary)]';
-    }
-  };
 
   const openIplProfile = (cricketer: GameCricketer) => {
     // Use the players URL format: /players/{firstname}-{lastname}
@@ -252,11 +233,11 @@ function DashPageContent() {
                       </div>
                     </td>
                     <td className="py-3 pr-4">
-                      <span className={`text-xs font-medium ${getTypeColor(stat.cricketer.playerType)}`}>
-                        {getTypeLabel(stat.cricketer.playerType)}
+                      <span className={`text-sm ${getTypeColor(stat.cricketer.playerType)}`}>
+                        {getTypeSymbol(stat.cricketer.playerType)}
                       </span>
                       {stat.cricketer.isForeign && (
-                        <span className="ml-1 text-xs text-[var(--accent-rose)]">OS</span>
+                        <span className="ml-1 text-sm">{FOREIGN_SYMBOL}</span>
                       )}
                     </td>
                     <td className="py-3 pr-4 text-center text-sm text-[var(--text-secondary)]">

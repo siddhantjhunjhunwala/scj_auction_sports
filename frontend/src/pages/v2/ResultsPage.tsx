@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { gamesApi } from '../../services/api';
 import GamePageWrapper from '../../components/layout/GamePageWrapper';
-import type { GameCricketer, GameParticipant, PlayerType } from '../../types';
+import { getTypeSymbol, getTypeColor, FOREIGN_SYMBOL } from '../../utils/playerSymbols';
+import type { GameCricketer, GameParticipant } from '../../types';
 
 interface TeamSummary {
   participant: GameParticipant;
@@ -66,26 +67,6 @@ function ResultsPageContent() {
   const pickedCricketers = useMemo(() => {
     return cricketers.filter((c) => c.isPicked).sort((a, b) => (a.pickOrder || 0) - (b.pickOrder || 0));
   }, [cricketers]);
-
-  const getTypeLabel = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'BAT';
-      case 'bowler': return 'BOWL';
-      case 'allrounder': return 'AR';
-      case 'wicketkeeper': return 'WK';
-      default: return String(type).toUpperCase();
-    }
-  };
-
-  const getTypeColor = (type: PlayerType): string => {
-    switch (type) {
-      case 'batsman': return 'bg-[var(--accent-gold)]/20 text-[var(--accent-gold)]';
-      case 'bowler': return 'bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)]';
-      case 'allrounder': return 'bg-[var(--accent-purple)]/20 text-[var(--accent-purple)]';
-      case 'wicketkeeper': return 'bg-[var(--accent-emerald)]/20 text-[var(--accent-emerald)]';
-      default: return 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]';
-    }
-  };
 
   const openIplProfile = (cricketer: GameCricketer) => {
     // Use the players URL format: /players/{firstname}-{lastname}
@@ -218,11 +199,11 @@ function ResultsPageContent() {
                         {cricketer.firstName} {cricketer.lastName}
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-xs px-1 py-0.5 rounded ${getTypeColor(cricketer.playerType)}`}>
-                          {getTypeLabel(cricketer.playerType)}
+                        <span className={`text-sm ${getTypeColor(cricketer.playerType)}`}>
+                          {getTypeSymbol(cricketer.playerType)}
                         </span>
                         {cricketer.isForeign && (
-                          <span className="text-xs text-[var(--accent-rose)]">OS</span>
+                          <span className="text-sm">{FOREIGN_SYMBOL}</span>
                         )}
                       </div>
                     </div>
@@ -286,11 +267,11 @@ function ResultsPageContent() {
                         </div>
                       </td>
                       <td className="py-3 pr-4">
-                        <span className={`text-xs px-2 py-1 rounded ${getTypeColor(cricketer.playerType)}`}>
-                          {getTypeLabel(cricketer.playerType)}
+                        <span className={`text-sm ${getTypeColor(cricketer.playerType)}`}>
+                          {getTypeSymbol(cricketer.playerType)}
                         </span>
                         {cricketer.isForeign && (
-                          <span className="ml-1 text-xs text-[var(--accent-rose)]">OS</span>
+                          <span className="ml-1 text-sm">{FOREIGN_SYMBOL}</span>
                         )}
                       </td>
                       <td className="py-3 pr-4 text-sm text-[var(--text-secondary)]">
