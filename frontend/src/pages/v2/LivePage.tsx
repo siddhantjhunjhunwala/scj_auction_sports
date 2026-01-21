@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
-// Auth context available if needed in future
-// import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
 import { gamesApi, gameAuctionApi } from '../../services/api';
@@ -70,11 +68,21 @@ function LivePageContent() {
       }
     };
 
-    const handleBid = () => {
-      // Scroll to latest bid
-      if (bidsContainerRef.current) {
-        bidsContainerRef.current.scrollTop = bidsContainerRef.current.scrollHeight;
+    // FIX: Extract auctionState from bid event and update state
+    const handleBid = (data: { auctionState: GameAuctionState; bid: BidLogEntry }) => {
+      // Update auction state from bid event
+      if (data.auctionState) {
+        setAuctionState(data.auctionState);
+        if (data.auctionState.currentHighBid > 0) {
+          setBidAmount(data.auctionState.currentHighBid + 0.5);
+        }
       }
+      // Scroll to latest bid
+      setTimeout(() => {
+        if (bidsContainerRef.current) {
+          bidsContainerRef.current.scrollTop = bidsContainerRef.current.scrollHeight;
+        }
+      }, 50);
     };
 
     const handlePlayerPicked = () => {
@@ -204,10 +212,28 @@ function LivePageContent() {
   };
 
   const openIplProfile = (cricketer: GameCricketer) => {
-    // Use the players URL format: /players/{firstname}-{lastname}
     const playerSlug = `${cricketer.firstName}-${cricketer.lastName}`.toLowerCase().replace(/\s+/g, '-');
     const iplUrl = `https://www.iplt20.com/players/${playerSlug}`;
     window.open(iplUrl, '_blank');
+  };
+
+  // Get high bidder name from auction state
+  const getHighBidderName = (): string | null => {
+    if (!auctionState?.currentHighBidderId) return null;
+
+    // Try to get from currentHighBidder
+    if (auctionState.currentHighBidder?.user) {
+      return auctionState.currentHighBidder.user.teamName || auctionState.currentHighBidder.user.name;
+    }
+
+    // Fallback: get from the last bid in the log
+    const biddingLog = auctionState.currentBiddingLog || [];
+    if (biddingLog.length > 0) {
+      const lastBid = biddingLog[biddingLog.length - 1];
+      return lastBid.teamName;
+    }
+
+    return null;
   };
 
   if (isLoading) {
@@ -224,49 +250,50 @@ function LivePageContent() {
   const isPaused = auctionState?.auctionStatus === 'paused';
   const canBid = isAuctionActive && !isPaused && participant && bidAmount > (auctionState?.currentHighBid || 0);
   const isHighBidder = auctionState?.currentHighBidderId === participant?.id;
+  const highBidderName = getHighBidderName();
 
   return (
-    <div className="h-[calc(100vh-10rem)] flex flex-col">
+    <div className="h-[calc(100vh-8rem)] flex flex-col">
       {/* Win Message Banner */}
       {auctionState?.lastWinMessage && (
-        <div className="mb-4 p-3 bg-[var(--accent-emerald)]/20 border border-[var(--accent-emerald)] rounded-lg text-center flex-shrink-0">
-          <span className="text-[var(--accent-emerald)] font-medium">{auctionState.lastWinMessage}</span>
+        <div className="mb-2 p-2 bg-[var(--accent-emerald)]/20 border border-[var(--accent-emerald)] rounded-lg text-center flex-shrink-0">
+          <span className="text-[var(--accent-emerald)] font-medium text-sm">{auctionState.lastWinMessage}</span>
         </div>
       )}
 
       {/* 4-Quadrant Layout */}
-      <div className="grid grid-cols-2 grid-rows-2 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1 min-h-0">
         {/* Q1: Current Player */}
-        <div className="glass-card p-5 flex flex-col overflow-hidden min-h-0">
-          <h3 className="text-sm font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-4">
+        <div className="glass-card p-3 flex flex-col overflow-hidden min-h-0">
+          <h3 className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2 flex-shrink-0">
             Current Player
           </h3>
 
           {currentCricketer ? (
             <div
-              className="flex-1 flex flex-col cursor-pointer"
+              className="flex-1 flex flex-col cursor-pointer overflow-hidden"
               onClick={() => openIplProfile(currentCricketer)}
             >
-              {/* Player Card */}
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-20 h-20 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center text-4xl overflow-hidden">
+              {/* Player Card - Compact */}
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-14 h-14 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center text-2xl overflow-hidden flex-shrink-0">
                   {currentCricketer.pictureUrl ? (
                     <img src={currentCricketer.pictureUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
                     '🏏'
                   )}
                 </div>
-                <div>
-                  <h2 className="text-2xl font-display text-[var(--text-primary)]">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-display text-[var(--text-primary)] truncate">
                     {currentCricketer.firstName} {currentCricketer.lastName}
                   </h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-sm font-medium ${getTypeColor(currentCricketer.playerType)}`}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-xs font-medium ${getTypeColor(currentCricketer.playerType)}`}>
                       {getTypeLabel(currentCricketer.playerType)}
                     </span>
-                    <span className="text-sm text-[var(--text-tertiary)]">{currentCricketer.iplTeam}</span>
+                    <span className="text-xs text-[var(--text-tertiary)]">{currentCricketer.iplTeam}</span>
                     {currentCricketer.isForeign && (
-                      <span className="text-xs px-1.5 py-0.5 bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] rounded">
+                      <span className="text-[10px] px-1 py-0.5 bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] rounded">
                         OS
                       </span>
                     )}
@@ -274,87 +301,77 @@ function LivePageContent() {
                 </div>
               </div>
 
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              {/* Stats - Compact */}
+              <div className="grid grid-cols-2 gap-2 text-xs flex-shrink-0">
                 {currentCricketer.battingRecord && (
-                  <div className="bg-[var(--bg-tertiary)] rounded-lg p-3">
-                    <div className="text-[var(--text-tertiary)] text-xs mb-1">Batting</div>
-                    <div className="text-[var(--text-primary)]">
-                      {currentCricketer.battingRecord.runs || 0} runs @ {currentCricketer.battingRecord.average?.toFixed(1) || '-'}
-                    </div>
-                    <div className="text-[var(--text-tertiary)] text-xs mt-1">
-                      SR: {currentCricketer.battingRecord.strikeRate?.toFixed(1) || '-'}
+                  <div className="bg-[var(--bg-tertiary)] rounded p-2">
+                    <div className="text-[var(--text-tertiary)] text-[10px] mb-0.5">Batting</div>
+                    <div className="text-[var(--text-primary)] text-xs">
+                      {currentCricketer.battingRecord.runs || 0} @ {currentCricketer.battingRecord.average?.toFixed(1) || '-'}
                     </div>
                   </div>
                 )}
                 {currentCricketer.bowlingRecord && currentCricketer.bowlingRecord.wickets && (
-                  <div className="bg-[var(--bg-tertiary)] rounded-lg p-3">
-                    <div className="text-[var(--text-tertiary)] text-xs mb-1">Bowling</div>
-                    <div className="text-[var(--text-primary)]">
+                  <div className="bg-[var(--bg-tertiary)] rounded p-2">
+                    <div className="text-[var(--text-tertiary)] text-[10px] mb-0.5">Bowling</div>
+                    <div className="text-[var(--text-primary)] text-xs">
                       {currentCricketer.bowlingRecord.wickets} wkts @ {currentCricketer.bowlingRecord.average?.toFixed(1) || '-'}
-                    </div>
-                    <div className="text-[var(--text-tertiary)] text-xs mt-1">
-                      Econ: {currentCricketer.bowlingRecord.economy?.toFixed(1) || '-'}
                     </div>
                   </div>
                 )}
               </div>
-
-              <div className="mt-auto pt-4 text-xs text-[var(--text-tertiary)]">
-                Click to view IPL profile
-              </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)]">
+            <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
               {isCreator ? (
-                <div className="text-center">
-                  <p className="mb-4">Select a player to start auction</p>
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {unpickedCricketers.slice(0, 10).map((c) => (
+                <div className="text-center w-full">
+                  <p className="mb-2 text-xs">Select a player</p>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {unpickedCricketers.slice(0, 8).map((c) => (
                       <button
                         key={c.id}
                         onClick={() => handleStartCricketer(c.id)}
-                        className="w-full p-2 text-left bg-[var(--bg-tertiary)] rounded-lg hover:bg-[var(--bg-elevated)] transition-colors"
+                        className="w-full p-1.5 text-left text-xs bg-[var(--bg-tertiary)] rounded hover:bg-[var(--bg-elevated)] transition-colors"
                       >
                         <span className="text-[var(--text-primary)]">{c.firstName} {c.lastName}</span>
-                        <span className={`ml-2 text-xs ${getTypeColor(c.playerType)}`}>{getTypeLabel(c.playerType)}</span>
+                        <span className={`ml-1 text-[10px] ${getTypeColor(c.playerType)}`}>{getTypeLabel(c.playerType)}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               ) : (
-                'Waiting for auctioneer to start'
+                'Waiting for auctioneer'
               )}
             </div>
           )}
         </div>
 
         {/* Q2: Bid Controls & Timer */}
-        <div className="glass-card p-4 flex flex-col overflow-y-auto min-h-0 relative custom-scrollbar">
-          <h3 className="text-sm font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-3 flex-shrink-0">
+        <div className="glass-card p-3 flex flex-col overflow-hidden min-h-0 relative">
+          <h3 className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2 flex-shrink-0">
             Bidding
           </h3>
 
           {currentCricketer ? (
             <div className="flex-1 flex flex-col min-h-0">
-              {/* Timer & Current Bid - Compact Row */}
-              <div className="flex items-center justify-between mb-4 flex-shrink-0">
+              {/* Timer & Current Bid Row */}
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
                 <div className="text-center">
-                  <div className={`text-4xl font-display font-bold ${
+                  <div className={`text-3xl font-display font-bold ${
                     timeRemaining !== null && timeRemaining <= 5 ? 'text-[var(--accent-red)]' : 'text-[var(--accent-gold)]'
                   }`}>
                     {timeRemaining !== null ? timeRemaining : '--'}
                   </div>
-                  <div className="text-xs text-[var(--text-tertiary)]">seconds</div>
+                  <div className="text-[10px] text-[var(--text-tertiary)]">seconds</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-xs text-[var(--text-tertiary)]">Current Bid</div>
-                  <div className="text-2xl font-bold text-[var(--text-primary)]">
+                <div className="text-right">
+                  <div className="text-[10px] text-[var(--text-tertiary)]">Current Bid</div>
+                  <div className="text-xl font-bold text-[var(--text-primary)]">
                     ${(auctionState?.currentHighBid || 0).toFixed(1)}M
                   </div>
-                  {auctionState?.currentHighBidder?.user && (
-                    <div className={`text-xs ${isHighBidder ? 'text-[var(--accent-emerald)]' : 'text-[var(--text-secondary)]'}`}>
-                      {isHighBidder ? 'You are winning!' : `by ${auctionState.currentHighBidder.user.teamName || auctionState.currentHighBidder.user.name}`}
+                  {highBidderName && (
+                    <div className={`text-[10px] ${isHighBidder ? 'text-[var(--accent-emerald)]' : 'text-[var(--text-secondary)]'}`}>
+                      {isHighBidder ? 'You are winning!' : `by ${highBidderName}`}
                     </div>
                   )}
                 </div>
@@ -363,35 +380,33 @@ function LivePageContent() {
               {/* Bid Input - Players Only */}
               {!isCreator && (
                 <div className="flex-shrink-0">
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="number"
-                      value={bidAmount}
-                      onChange={(e) => setBidAmount(parseFloat(e.target.value) || 0)}
-                      step={0.5}
-                      min={(auctionState?.currentHighBid || 0) + 0.5}
-                      className="flex-1 px-3 py-2 text-center text-lg bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                  </div>
-                  <div className="flex gap-1.5 mb-3">
+                  <input
+                    type="number"
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(parseFloat(e.target.value) || 0)}
+                    step={0.5}
+                    min={(auctionState?.currentHighBid || 0) + 0.5}
+                    className="w-full px-2 py-1.5 text-center text-base bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded text-[var(--text-primary)] focus:border-[var(--accent-gold)] focus:outline-none mb-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <div className="flex gap-1 mb-2">
                     {[0.5, 1, 2, 5].map((increment) => (
                       <button
                         key={increment}
                         onClick={() => setBidAmount((prev) => prev + increment)}
-                        className="flex-1 py-1.5 text-xs bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
+                        className="flex-1 py-1 text-[10px] bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
                       >
-                        +{increment}M
+                        +{increment}
                       </button>
                     ))}
                   </div>
                   <button
                     onClick={handleBid}
                     disabled={!canBid || isBidding}
-                    className="w-full py-3 text-base font-bold btn-primary disabled:opacity-50"
+                    className="w-full py-2 text-sm font-bold btn-primary disabled:opacity-50"
                   >
-                    {isBidding ? 'Bidding...' : `Bid $${bidAmount.toFixed(1)}M`}
+                    {isBidding ? '...' : `Bid $${bidAmount.toFixed(1)}M`}
                   </button>
-                  <div className="text-center text-xs text-[var(--text-tertiary)] mt-1.5">
+                  <div className="text-center text-[10px] text-[var(--text-tertiary)] mt-1">
                     Budget: ${(participant?.budgetRemaining || 0).toFixed(1)}M
                   </div>
                 </div>
@@ -399,31 +414,31 @@ function LivePageContent() {
 
               {/* Auctioneer Controls */}
               {isCreator && (
-                <div className="mt-auto space-y-3">
-                  <div className="flex gap-2">
+                <div className="flex-shrink-0 space-y-2">
+                  <div className="flex gap-1.5">
                     {isPaused ? (
-                      <button onClick={handleResume} className="flex-1 py-2 btn-primary">
+                      <button onClick={handleResume} className="flex-1 py-1.5 text-xs btn-primary">
                         Resume
                       </button>
                     ) : (
-                      <button onClick={handlePause} className="flex-1 py-2 btn-secondary">
+                      <button onClick={handlePause} className="flex-1 py-1.5 text-xs btn-secondary">
                         Pause
                       </button>
                     )}
-                    <button onClick={handleSkip} className="flex-1 py-2 btn-secondary">
+                    <button onClick={handleSkip} className="flex-1 py-1.5 text-xs btn-secondary">
                       Skip
                     </button>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAddTime(10)} className="flex-1 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg hover:bg-[var(--bg-elevated)]">
+                  <div className="flex gap-1.5">
+                    <button onClick={() => handleAddTime(10)} className="flex-1 py-1.5 text-[10px] bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded hover:bg-[var(--bg-elevated)]">
                       +10s
                     </button>
-                    <button onClick={() => handleAddTime(30)} className="flex-1 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded-lg hover:bg-[var(--bg-elevated)]">
+                    <button onClick={() => handleAddTime(30)} className="flex-1 py-1.5 text-[10px] bg-[var(--bg-tertiary)] border border-[var(--glass-border)] rounded hover:bg-[var(--bg-elevated)]">
                       +30s
                     </button>
                   </div>
                   {auctionState?.currentHighBid && auctionState.currentHighBid > 0 && (
-                    <button onClick={handleAssign} className="w-full py-3 btn-primary bg-[var(--accent-emerald)]">
+                    <button onClick={handleAssign} className="w-full py-2 text-xs btn-primary bg-[var(--accent-emerald)]">
                       Assign to Winner
                     </button>
                   )}
@@ -431,7 +446,7 @@ function LivePageContent() {
               )}
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)]">
+            <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
               No active auction
             </div>
           )}
@@ -439,50 +454,47 @@ function LivePageContent() {
           {/* Paused Banner */}
           {isPaused && (
             <div className="absolute inset-0 bg-[var(--bg-deep)]/80 flex items-center justify-center rounded-xl">
-              <div className="text-2xl font-display text-[var(--accent-gold)]">
-                Paused - Back shortly
+              <div className="text-lg font-display text-[var(--accent-gold)]">
+                Paused
               </div>
             </div>
           )}
         </div>
 
         {/* Q3: All Bids */}
-        <div className="glass-card p-5 flex flex-col overflow-hidden min-h-0">
-          <h3 className="text-sm font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-4 flex-shrink-0">
-            All Bids
+        <div className="glass-card p-3 flex flex-col overflow-hidden min-h-0">
+          <h3 className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2 flex-shrink-0">
+            All Bids ({biddingLog.length})
           </h3>
 
           <div
             ref={bidsContainerRef}
-            className="flex-1 overflow-y-auto custom-scrollbar space-y-2 min-h-0"
+            className="flex-1 overflow-y-auto custom-scrollbar space-y-1 min-h-0"
           >
             {biddingLog.length > 0 ? (
               biddingLog.map((bid: BidLogEntry, index: number) => (
                 <div
                   key={`${bid.participantId}-${bid.timestamp}`}
-                  className={`p-3 rounded-lg ${
+                  className={`p-2 rounded ${
                     bid.participantId === participant?.id
                       ? 'bg-[var(--accent-gold)]/10 border border-[var(--accent-gold)]/30'
                       : 'bg-[var(--bg-tertiary)]'
                   } ${index === biddingLog.length - 1 ? 'animate-slide-up' : ''}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`font-medium ${
+                    <span className={`text-xs font-medium ${
                       bid.participantId === participant?.id ? 'text-[var(--accent-gold)]' : 'text-[var(--text-primary)]'
                     }`}>
                       {bid.teamName}
                     </span>
-                    <span className="text-lg font-bold text-[var(--text-primary)]">
+                    <span className="text-sm font-bold text-[var(--text-primary)]">
                       ${bid.amount.toFixed(1)}M
                     </span>
-                  </div>
-                  <div className="text-xs text-[var(--text-tertiary)] mt-1">
-                    {new Date(bid.timestamp).toLocaleTimeString()}
                   </div>
                 </div>
               ))
             ) : (
-              <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)]">
+              <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
                 No bids yet
               </div>
             )}
@@ -490,26 +502,26 @@ function LivePageContent() {
         </div>
 
         {/* Q4: My Team */}
-        <div className="glass-card p-5 flex flex-col overflow-hidden min-h-0">
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
-            <h3 className="text-sm font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
+        <div className="glass-card p-3 flex flex-col overflow-hidden min-h-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <h3 className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
               {isCreator ? 'Teams' : 'My Team'}
             </h3>
-            <span className="text-sm text-[var(--text-secondary)]">
+            <span className="text-xs text-[var(--text-secondary)]">
               {myTeam.length} players
             </span>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
             {myTeam.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {myTeam.map((player) => (
                   <div
                     key={player.id}
                     onClick={() => openIplProfile(player)}
-                    className="flex items-center gap-3 p-2 bg-[var(--bg-tertiary)] rounded-lg cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors"
+                    className="flex items-center gap-2 p-1.5 bg-[var(--bg-tertiary)] rounded cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-[var(--bg-elevated)] flex items-center justify-center text-sm overflow-hidden">
+                    <div className="w-6 h-6 rounded bg-[var(--bg-elevated)] flex items-center justify-center text-xs overflow-hidden flex-shrink-0">
                       {player.pictureUrl ? (
                         <img src={player.pictureUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -517,41 +529,38 @@ function LivePageContent() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      <div className="text-xs font-medium text-[var(--text-primary)] truncate">
                         {player.firstName} {player.lastName}
                       </div>
-                      <div className={`text-xs ${getTypeColor(player.playerType)}`}>
-                        {getTypeLabel(player.playerType)}
-                      </div>
                     </div>
-                    <div className="text-sm font-bold text-[var(--accent-gold)]">
-                      ${player.pricePaid?.toFixed(1)}M
+                    <div className="text-xs font-bold text-[var(--accent-gold)]">
+                      ${player.pricePaid?.toFixed(1)}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)]">
-                No players picked yet
+              <div className="flex-1 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
+                No players yet
               </div>
             )}
           </div>
 
-          {/* Team Stats */}
+          {/* Team Stats - Compact */}
           {!isCreator && myTeam.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-[var(--glass-border)]">
-              <div className="grid grid-cols-2 gap-4 text-center text-sm">
+            <div className="mt-2 pt-2 border-t border-[var(--glass-border)] flex-shrink-0">
+              <div className="flex justify-between text-xs">
                 <div>
-                  <div className="text-[var(--text-tertiary)]">Total Spent</div>
-                  <div className="text-lg font-bold text-[var(--text-primary)]">
+                  <span className="text-[var(--text-tertiary)]">Spent: </span>
+                  <span className="font-bold text-[var(--text-primary)]">
                     ${myTeam.reduce((sum, p) => sum + (p.pricePaid || 0), 0).toFixed(1)}M
-                  </div>
+                  </span>
                 </div>
                 <div>
-                  <div className="text-[var(--text-tertiary)]">Remaining</div>
-                  <div className="text-lg font-bold text-[var(--accent-emerald)]">
+                  <span className="text-[var(--text-tertiary)]">Left: </span>
+                  <span className="font-bold text-[var(--accent-emerald)]">
                     ${(participant?.budgetRemaining || 0).toFixed(1)}M
-                  </div>
+                  </span>
                 </div>
               </div>
             </div>
