@@ -43,29 +43,29 @@ async function getGameAuctionState(gameId: string) {
   return state;
 }
 
-// Helper to format auction state response
-async function formatGameAuctionState(state: Awaited<ReturnType<typeof getGameAuctionState>>) {
-  const currentCricketer = state.currentCricketerId
-    ? await prisma.gameCricketer.findUnique({
-        where: { id: state.currentCricketerId },
-      })
-    : null;
-
-  const currentHighBidder = state.currentHighBidderId
-    ? await prisma.gameParticipant.findUnique({
-        where: { id: state.currentHighBidderId },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              teamName: true,
-              avatarUrl: true,
-            },
-          },
-        },
-      })
-    : null;
+// Helper to format auction state response - optimized with parallel queries
+async function formatGameAuctionState(
+  state: Awaited<ReturnType<typeof getGameAuctionState>>,
+  // Optional pre-fetched data to avoid redundant queries
+  prefetchedCricketer?: { id: string; firstName: string; lastName: string; playerType: string; isForeign: boolean; iplTeam: string; battingRecord: unknown; bowlingRecord: unknown; pictureUrl: string | null; isPicked: boolean; pricePaid: number | null; wasSkipped: boolean } | null,
+  prefetchedBidder?: { id: string; budgetRemaining: number; user: { id: string; name: string; teamName: string | null; avatarUrl: string | null } } | null
+) {
+  // Use prefetched data or fetch in parallel
+  const [currentCricketer, currentHighBidder] = await Promise.all([
+    prefetchedCricketer !== undefined
+      ? Promise.resolve(prefetchedCricketer)
+      : state.currentCricketerId
+        ? prisma.gameCricketer.findUnique({ where: { id: state.currentCricketerId } })
+        : Promise.resolve(null),
+    prefetchedBidder !== undefined
+      ? Promise.resolve(prefetchedBidder)
+      : state.currentHighBidderId
+        ? prisma.gameParticipant.findUnique({
+            where: { id: state.currentHighBidderId },
+            include: { user: { select: { id: true, name: true, teamName: true, avatarUrl: true } } },
+          })
+        : Promise.resolve(null),
+  ]);
 
   return {
     id: state.id,
@@ -134,10 +134,11 @@ router.post(
       const { cricketerId } = req.body;
       const io: Server = req.app.get('io');
 
-      // Verify cricketer exists and belongs to this game
-      const cricketer = await prisma.gameCricketer.findFirst({
-        where: { id: cricketerId, gameId },
-      });
+      // Fetch cricketer and state in parallel
+      const [cricketer, state] = await Promise.all([
+        prisma.gameCricketer.findFirst({ where: { id: cricketerId, gameId } }),
+        getGameAuctionState(gameId),
+      ]);
 
       if (!cricketer) {
         res.status(404).json({ message: 'Cricketer not found in this game' });
@@ -149,34 +150,32 @@ router.post(
         return;
       }
 
-      // Update game status if needed
-      await prisma.game.update({
-        where: { id: gameId },
-        data: {
-          status: 'auction_active',
-          joiningAllowed: false,
-        },
-      });
-
       // Set 60 second timer
       const timerEnd = new Date(Date.now() + 60 * 1000);
 
-      const state = await getGameAuctionState(gameId);
-      const updatedState = await prisma.gameAuctionState.update({
-        where: { id: state.id },
-        data: {
-          currentCricketerId: cricketerId,
-          auctionStatus: 'in_progress',
-          timerEndTime: timerEnd,
-          timerPausedAt: null,
-          currentHighBid: 0,
-          currentHighBidderId: null,
-          currentBiddingLog: [],
-          lastWinMessage: null,
-        },
-      });
+      // Update game status and auction state in parallel
+      const [, updatedState] = await Promise.all([
+        prisma.game.update({
+          where: { id: gameId },
+          data: { status: 'auction_active', joiningAllowed: false },
+        }),
+        prisma.gameAuctionState.update({
+          where: { id: state.id },
+          data: {
+            currentCricketerId: cricketerId,
+            auctionStatus: 'in_progress',
+            timerEndTime: timerEnd,
+            timerPausedAt: null,
+            currentHighBid: 0,
+            currentHighBidderId: null,
+            currentBiddingLog: [],
+            lastWinMessage: null,
+          },
+        }),
+      ]);
 
-      const formatted = await formatGameAuctionState(updatedState);
+      // Format with prefetched cricketer, no high bidder yet
+      const formatted = await formatGameAuctionState(updatedState, cricketer, null);
       io.to(`game:${gameId}`).emit('auction:update', formatted);
       res.json(formatted);
     } catch (error) {
@@ -205,7 +204,17 @@ router.post(
 
       const participantId = req.participant.id;
 
-      const state = await getGameAuctionState(gameId);
+      // Fetch state, participant, and team in parallel for speed
+      const [state, participant, participantTeam] = await Promise.all([
+        getGameAuctionState(gameId),
+        prisma.gameParticipant.findUnique({
+          where: { id: participantId },
+          include: { user: true },
+        }),
+        prisma.gameCricketer.findMany({
+          where: { pickedByParticipantId: participantId },
+        }),
+      ]);
 
       // Validate auction is in progress
       if (state.auctionStatus !== 'in_progress') {
@@ -218,12 +227,7 @@ router.post(
         return;
       }
 
-      // Get participant and cricketer
-      const participant = await prisma.gameParticipant.findUnique({
-        where: { id: participantId },
-        include: { user: true },
-      });
-
+      // Get cricketer (we need to fetch after we know currentCricketerId)
       const cricketer = await prisma.gameCricketer.findUnique({
         where: { id: state.currentCricketerId },
       });
@@ -232,11 +236,6 @@ router.post(
         res.status(400).json({ message: 'Invalid participant or cricketer' });
         return;
       }
-
-      // Get participant's current team in this game
-      const participantTeam = await prisma.gameCricketer.findMany({
-        where: { pickedByParticipantId: participantId },
-      });
 
       const teamSize = participantTeam.length;
       const foreignCount = participantTeam.filter(c => c.isForeign).length;
@@ -311,9 +310,14 @@ router.post(
         },
       });
 
-      const formatted = await formatGameAuctionState(updatedState);
+      // Format with prefetched data to avoid extra queries
+      const formatted = await formatGameAuctionState(
+        updatedState,
+        cricketer, // Prefetch cricketer
+        { id: participant.id, budgetRemaining: participant.budgetRemaining, user: participant.user } // Prefetch bidder
+      );
 
-      // Emit bid event to game room
+      // Emit bid event to game room ASAP
       io.to(`game:${gameId}`).emit('auction:bid', {
         auctionState: formatted,
         bid: {
