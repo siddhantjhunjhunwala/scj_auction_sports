@@ -60,7 +60,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const loadGame = useCallback(async (gameId: string) => {
     // Don't reload if same game is already loaded
-    if (currentGame?.id === gameId) return;
+    if (currentGame?.id === gameId) {
+      // Ensure we're in the socket room even if game is already loaded
+      joinGameRoom(gameId);
+      return;
+    }
 
     try {
       setIsLoading(true);

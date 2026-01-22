@@ -120,6 +120,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   const joinGameRoom = useCallback((gameId: string) => {
     if (socketRef.current && socketRef.current.connected) {
+      // Don't rejoin if already in the same room
+      if (currentGameId === gameId) {
+        console.log(`Already in game room: ${gameId}`);
+        return;
+      }
       // Leave current room if different
       if (currentGameId && currentGameId !== gameId) {
         socketRef.current.emit('game:leave');

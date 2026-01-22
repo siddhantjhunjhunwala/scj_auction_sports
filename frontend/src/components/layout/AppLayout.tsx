@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useGame } from '../../context/GameContext';
@@ -105,8 +105,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     navigate('/home');
   };
 
-  // Build navigation sections
-  const NAV_SECTIONS: NavSection[] = [
+  // Build navigation sections - memoized to prevent recreation on every render
+  const NAV_SECTIONS: NavSection[] = useMemo(() => [
     {
       header: 'Home',
       items: [
@@ -225,7 +225,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         },
       ],
     },
-  ];
+  ], [gameId]);
 
   const isActivePath = (path: string) => {
     if (path === '#') return false;
