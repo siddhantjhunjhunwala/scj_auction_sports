@@ -295,30 +295,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   const isDisabled = isItemDisabled(item);
                   const itemKey = `${section.header}-${item.label}`;
 
-                  if (isDisabled) {
-                    return (
-                      <div
-                        key={itemKey}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-muted)] cursor-not-allowed opacity-40"
-                        title={item.requiresGame ? 'Join or create a game first' : 'Available after auction ends'}
-                      >
-                        <span className="opacity-50">{item.icon}</span>
-                        {item.label}
-                      </div>
-                    );
-                  }
-
+                  // Always use Link but disable via styling to prevent duplicate elements
                   return (
                     <Link
                       key={itemKey}
-                      to={item.path}
+                      to={isDisabled ? '#' : item.path}
+                      onClick={isDisabled ? (e) => e.preventDefault() : undefined}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        isActive
-                          ? 'bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border-l-2 border-[var(--accent-gold)]'
-                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                        isDisabled
+                          ? 'text-[var(--text-muted)] cursor-not-allowed opacity-40 pointer-events-none'
+                          : isActive
+                            ? 'bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border-l-2 border-[var(--accent-gold)]'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
                       }`}
+                      title={isDisabled ? (item.requiresGame ? 'Join or create a game first' : 'Available after auction ends') : undefined}
+                      aria-disabled={isDisabled}
                     >
-                      <span className={isActive ? 'text-[var(--accent-gold)]' : 'opacity-70'}>
+                      <span className={isDisabled ? 'opacity-50' : isActive ? 'text-[var(--accent-gold)]' : 'opacity-70'}>
                         {item.icon}
                       </span>
                       {item.label}
